@@ -38,7 +38,7 @@ describe("Container API", () => {
   });
 
   it("injectAsync", async () => {
-    expect(injectAsync(MyService)).rejects.toThrowError(
+    await expect(injectAsync(MyService)).rejects.toThrowError(
       "You can only invoke inject() or injectAsync() within an injection context",
     );
 

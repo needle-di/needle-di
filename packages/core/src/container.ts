@@ -2,7 +2,7 @@ import { type Token, isClassToken, toString, isInjectionToken, getToken } from "
 import * as Guards from "./providers.ts";
 import type { Provider } from "./providers.ts";
 import { getInjectableTargets, isInjectable } from "./decorators.ts";
-import { assertPresent, assertSingle, getParentClasses, windowedSlice } from "./utils.ts";
+import { assertPresent, assertSingle, getParentClasses, promiseTry, windowedSlice } from "./utils.ts";
 import { Factory } from "./factory.ts";
 import { injectionContext } from "./context.ts";
 
@@ -172,18 +172,36 @@ export class Container {
    *
    * {@link https://needle-di.io/concepts/containers.html}
    */
+  public get<T>(token: Token<T>): T;
   public get<T>(token: Token<T>, options: { multi: true }): T[];
   public get<T>(token: Token<T>, options: { optional: true }): T | undefined;
   public get<T>(token: Token<T>, options: { multi: true; optional: true }): T[] | undefined;
-  public get<T>(token: Token<T>, options?: { optional?: boolean; multi?: boolean }): T;
-  public get<T>(token: Token<T>, options?: { optional?: boolean; multi?: boolean }): T | T[] | undefined {
+  public get<T>(token: Token<T>, options: { lazy: true }): () => T;
+  public get<T>(token: Token<T>, options: { lazy: true; multi: true }): () => T[];
+  public get<T>(token: Token<T>, options: { lazy: true; optional: true }): () => T | undefined;
+  public get<T>(token: Token<T>, options: { lazy: true; multi: true; optional: true }): () => T[] | undefined;
+  public get<T>(token: Token<T>, options?: { optional?: boolean; multi?: boolean; lazy?: false }): T | T[] | undefined;
+  public get<T>(
+    token: Token<T>,
+    options?: { optional?: boolean; multi?: boolean; lazy?: boolean },
+  ): T | T[] | undefined | (() => T | T[] | undefined);
+  public get<T>(
+    token: Token<T>,
+    options?: { optional?: boolean; multi?: boolean; lazy?: boolean },
+  ): T | T[] | undefined | (() => T | T[] | undefined) {
+    const lazy = options?.lazy ?? false;
+
+    if (lazy) {
+      return () => this.get(token, { ...options, lazy: false });
+    }
+
     this.autoBindIfNeeded(token);
 
     const optional = options?.optional ?? false;
 
     if (!this.providers.has(token)) {
       if (this.parent) {
-        return this.parent.get(token, options);
+        return this.parent.get(token, { ...options, lazy: false });
       }
       if (optional) {
         return undefined;
@@ -220,53 +238,85 @@ export class Container {
    *
    * {@link https://needle-di.io/advanced/async-injection.html}
    */
-  public async getAsync<T>(token: Token<T>, options: { multi: true }): Promise<T[]>;
-  public async getAsync<T>(token: Token<T>, options: { optional: true }): Promise<T | undefined>;
-  public async getAsync<T>(token: Token<T>, options: { multi: true; optional: true }): Promise<T[] | undefined>;
-  public async getAsync<T>(token: Token<T>, options?: { optional?: boolean; multi?: boolean }): Promise<T>;
-  public async getAsync<T>(
+  public getAsync<T>(token: Token<T>): Promise<T>;
+  public getAsync<T>(token: Token<T>, options: { multi: true }): Promise<T[]>;
+  public getAsync<T>(token: Token<T>, options: { optional: true }): Promise<T | undefined>;
+  public getAsync<T>(token: Token<T>, options: { multi: true; optional: true }): Promise<T[] | undefined>;
+  public getAsync<T>(token: Token<T>, options: { lazy: true }): () => Promise<T>;
+  public getAsync<T>(token: Token<T>, options: { lazy: true; multi: true }): () => Promise<T[]>;
+  public getAsync<T>(token: Token<T>, options: { lazy: true; optional: true }): () => Promise<T | undefined>;
+  public getAsync<T>(
+    token: Token<T>,
+    options: { lazy: true; multi: true; optional: true },
+  ): () => Promise<T[] | undefined>;
+  public getAsync<T>(
     token: Token<T>,
     options?: {
       optional?: boolean;
       multi?: boolean;
+      lazy?: false;
     },
-  ): Promise<T | T[] | undefined> {
-    this.autoBindIfNeeded(token);
+  ): Promise<T | T[] | undefined>;
+  public getAsync<T>(
+    token: Token<T>,
+    options?: {
+      optional?: boolean;
+      multi?: boolean;
+      lazy?: boolean;
+    },
+  ): Promise<T | T[] | undefined> | (() => Promise<T | T[] | undefined>);
+  public getAsync<T>(
+    token: Token<T>,
+    options?: {
+      optional?: boolean;
+      multi?: boolean;
+      lazy?: boolean;
+    },
+  ): Promise<T | T[] | undefined> | (() => Promise<T | T[] | undefined>) {
+    const lazy = options?.lazy ?? false;
 
-    const optional = options?.optional ?? false;
+    if (lazy) {
+      return () => this.getAsync(token, { ...options, lazy: false });
+    }
 
-    if (!this.providers.has(token)) {
-      if (optional) {
-        return undefined;
+    return promiseTry(async () => {
+      this.autoBindIfNeeded(token);
+
+      const optional = options?.optional ?? false;
+
+      if (!this.providers.has(token)) {
+        if (optional) {
+          return undefined;
+        }
+        throw Error(`No provider(s) found for ${toString(token)}`);
       }
-      throw Error(`No provider(s) found for ${toString(token)}`);
-    }
 
-    const providers = assertPresent(this.providers.get(token));
+      const providers = assertPresent(this.providers.get(token));
 
-    if (!this.singletons.has(token)) {
-      await injectionContext(this).runAsync(async () => {
-        const values = await Promise.all(providers.map((it) => this.factory.constructAsync(it)));
+      if (!this.singletons.has(token)) {
+        await injectionContext(this).runAsync(async () => {
+          const values = await Promise.all(providers.map((it) => this.factory.constructAsync(it)));
 
-        this.singletons.set(token, values.flat());
-      });
-    }
+          this.singletons.set(token, values.flat());
+        });
+      }
 
-    const singletons = assertPresent(this.singletons.get(token));
-    const multi = options?.multi ?? false;
+      const singletons = assertPresent(this.singletons.get(token));
+      const multi = options?.multi ?? false;
 
-    if (multi) {
-      return singletons;
-    } else {
-      return assertSingle(
-        singletons,
-        () =>
-          new Error(
-            `Requesting a single value for ${toString(token)}, but multiple values were provided. ` +
-              `Consider passing "{ multi: true }" to inject all values, or adjust your bindings accordingly.`,
-          ),
-      );
-    }
+      if (multi) {
+        return singletons;
+      } else {
+        return assertSingle(
+          singletons,
+          () =>
+            new Error(
+              `Requesting a single value for ${toString(token)}, but multiple values were provided. ` +
+                `Consider passing "{ multi: true }" to inject all values, or adjust your bindings accordingly.`,
+            ),
+        );
+      }
+    });
   }
 
   /**

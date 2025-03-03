@@ -58,17 +58,46 @@ class MyService {
 ```
 Although this is less verbose, this will not allow you to pass in those dependencies when you construct the cass manually, e.g. in unit tests.
 
-## About the `inject()` function
+## About the `inject()` and `injectAsync()` functions
 
-Note that the `inject()` function is only available in the "injection context":
+Note that the `inject()` and `injectAsync()` functions are only available in the "injection context":
 
 - During construction of a class being instantiated by the DI container;
 - In the initializer for fields of such classes;
-- In a factory function specified for `useFactory` of a provider;
+- In a synchronous factory function specified for `useFactory` of a provider;
 - In the `factory` function specified for an `InjectionToken`.
 
 If you try to use this function outside this context, it will throw
 an error. This is because Needle DI needs a reference to a DI container when
 constructing services globally.
+
+::: warning
+When using an asynchronous factory provider, you cannot use the `inject()` / `injectAsync()`
+functions. Please use the provider `container` instance instead.
+
+So instead of:
+```ts
+{
+  provide: LOGGER,
+  useFactory: async () => {
+    // ...
+    return MyLogger(inject(OTHER_DEP));
+  },
+  async: true
+}
+```
+Please use:
+So instead of:
+```ts
+{
+  provide: LOGGER,
+  useFactory: async (container) => {
+    // ...
+    return MyLogger(container.get(OTHER_DEP));
+  },
+  async: true
+}
+```
+:::
 
 [parameter decorators]: https://github.com/tc39/proposal-class-method-parameter-decorators

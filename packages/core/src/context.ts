@@ -4,11 +4,18 @@ import type { Token } from "./tokens.ts";
 /**
  * Injects a service within the current injection context, using the token provided.
  */
+export function inject<T>(token: Token<T>): T;
 export function inject<T>(token: Token<T>, options: { multi: true }): T[];
 export function inject<T>(token: Token<T>, options: { optional: true }): T | undefined;
 export function inject<T>(token: Token<T>, options: { multi: true; optional: true }): T[] | undefined;
-export function inject<T>(token: Token<T>, options?: { optional?: boolean; multi?: boolean }): T;
-export function inject<T>(token: Token<T>, options?: { optional?: boolean; multi?: boolean }): T | T[] | undefined {
+export function inject<T>(token: Token<T>, options: { lazy: true }): () => T;
+export function inject<T>(token: Token<T>, options: { lazy: true; multi: true }): () => T[];
+export function inject<T>(token: Token<T>, options: { lazy: true; optional: true }): () => T | undefined;
+export function inject<T>(token: Token<T>, options: { lazy: true; multi: true; optional: true }): () => T[] | undefined;
+export function inject<T>(
+  token: Token<T>,
+  options?: { optional?: boolean; multi?: boolean; lazy?: boolean },
+): T | T[] | undefined | (() => T | T[] | undefined) {
   try {
     return _currentContext.run((container) => container.get(token, options));
   } catch (error) {
@@ -23,28 +30,36 @@ export function inject<T>(token: Token<T>, options?: { optional?: boolean; multi
 /**
  * Injects a service asynchronously within the current injection context, using the token provided.
  */
-export async function injectAsync<T>(token: Token<T>, options: { multi: true }): Promise<T[]>;
-export async function injectAsync<T>(token: Token<T>, options: { optional: true }): Promise<T | undefined>;
-export async function injectAsync<T>(
+export function injectAsync<T>(token: Token<T>): Promise<T>;
+export function injectAsync<T>(token: Token<T>, options: { multi: true }): Promise<T[]>;
+export function injectAsync<T>(token: Token<T>, options: { optional: true }): Promise<T | undefined>;
+export function injectAsync<T>(token: Token<T>, options: { multi: true; optional: true }): Promise<T[] | undefined>;
+export function injectAsync<T>(token: Token<T>, options: { lazy: true }): () => Promise<T>;
+export function injectAsync<T>(token: Token<T>, options: { lazy: true; multi: true }): () => Promise<T[]>;
+export function injectAsync<T>(token: Token<T>, options: { lazy: true; optional: true }): () => Promise<T | undefined>;
+export function injectAsync<T>(
   token: Token<T>,
-  options: { multi: true; optional: true },
-): Promise<T[] | undefined>;
-export async function injectAsync<T>(token: Token<T>, options?: { optional?: boolean; multi?: boolean }): Promise<T>;
-export async function injectAsync<T>(
+  options: { lazy: true; multi: true; optional: true },
+): () => Promise<T[] | undefined>;
+export function injectAsync<T>(
   token: Token<T>,
   options?: {
     optional?: boolean;
     multi?: boolean;
+    lazy?: boolean;
   },
-): Promise<T | T[] | undefined> {
+): Promise<T | T[] | undefined> | (() => Promise<T | T[] | undefined>) {
   try {
-    return _currentContext.runAsync((container) => container.getAsync(token, options));
+    if (options?.lazy) {
+      return _currentContext.run((container) => container.getAsync(token, { ...options, lazy: true }));
+    }
+    return _currentContext.runAsync((container) => container.getAsync(token, { ...options, lazy: false }));
   } catch (error) {
     if (error instanceof NeedsInjectionContextError && options?.optional === true) {
-      return undefined;
+      return Promise.resolve(undefined);
     }
 
-    throw error;
+    return Promise.reject(error);
   }
 }
 
@@ -92,7 +107,7 @@ class InjectionContext implements Context {
     }
   }
 
-  async runAsync<T>(block: (container: Container) => Promise<T>): Promise<T> {
+  async runAsync<T>(block: (container: Container) => Promise<T> | T): Promise<T> {
     const originalContext = _currentContext;
     try {
       // eslint-disable-next-line @typescript-eslint/no-this-alias
@@ -104,7 +119,7 @@ class InjectionContext implements Context {
   }
 }
 
-let _currentContext: Context = new GlobalContext();
+let _currentContext: GlobalContext | InjectionContext = new GlobalContext();
 
 /**
  * Creates a new injection context.

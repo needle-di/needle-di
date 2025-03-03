@@ -1,9 +1,10 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { Container } from "./container.ts";
+import { bootstrap, bootstrapAsync, Container } from "./container.ts";
 import { InjectionToken } from "./tokens.ts";
 import { injectable } from "./decorators.ts";
-import { inject } from "./context.ts";
+import { inject, injectAsync } from "./context.ts";
+import { delay } from "./utils.ts";
 
 const myServiceConstructorSpy = vi.fn();
 
@@ -104,7 +105,7 @@ describe("Providers", () => {
 
     expect(() => container.get(MyService)).toThrowError("No provider(s) found");
     expect(container.get(MyService, { optional: true })).toBeUndefined();
-    expect(container.getAsync(MyService)).rejects.toThrowError("No provider(s) found");
+    await expect(container.getAsync(MyService)).rejects.toThrowError("No provider(s) found");
     expect(await container.getAsync(MyService, { optional: true })).toBeUndefined();
 
     container.bind({
@@ -292,7 +293,7 @@ describe("Providers", () => {
         });
 
       expect(await container.getAsync(TOKEN, { multi: true })).toEqual([1, 2]);
-      expect(container.getAsync(OTHER_TOKEN, { multi: true })).rejects.toThrowError("No provider(s) found");
+      await expect(container.getAsync(OTHER_TOKEN, { multi: true })).rejects.toThrowError("No provider(s) found");
       expect(await container.getAsync(OTHER_TOKEN, { multi: true, optional: true })).toBeUndefined();
 
       expect(() => {
@@ -465,6 +466,203 @@ describe("Providers", () => {
 
       expect(parent.get("tokenA", { multi: true })).toEqual(["a1", "a2"]);
       expect(child.get("tokenA", { multi: true })).toEqual(["a3", "a4"]);
+    });
+  });
+
+  describe("Lazy injection", () => {
+    describe("sync", () => {
+      it("should construct lazily and once", () => {
+        const barConstructed = vi.fn();
+        const otherConstructed = vi.fn();
+
+        @injectable()
+        class FooService {
+          constructor(private readonly barService = inject(BarService, { lazy: true })) {}
+
+          doSomething() {
+            return this.barService().getBar();
+          }
+        }
+
+        @injectable()
+        class BarService {
+          constructor(private readonly otherService = inject(OtherService)) {
+            barConstructed();
+          }
+
+          getBar(): string {
+            return "Bar!";
+          }
+        }
+
+        @injectable()
+        // eslint-disable-next-line @typescript-eslint/no-extraneous-class
+        class OtherService {
+          constructor() {
+            otherConstructed();
+          }
+        }
+
+        beforeEach(() => {
+          barConstructed.mockReset();
+          otherConstructed.mockReset();
+        });
+
+        const fooService = bootstrap(FooService);
+
+        expect(barConstructed).not.toHaveBeenCalled();
+        expect(otherConstructed).not.toHaveBeenCalled();
+
+        const result = fooService.doSomething();
+
+        expect(barConstructed).toHaveBeenCalled();
+        expect(otherConstructed).toHaveBeenCalled();
+
+        expect(result).toBe("Bar!");
+
+        fooService.doSomething();
+
+        expect(barConstructed).toHaveBeenCalledTimes(1);
+        expect(otherConstructed).toHaveBeenCalledTimes(1);
+      });
+
+      it("should work with optionals", () => {
+        @injectable()
+        class FooService {
+          constructor(private readonly barService = inject(BarService, { lazy: true, optional: true })) {}
+
+          doSomething(): string | undefined {
+            return this.barService()?.getBar();
+          }
+        }
+
+        class BarService {
+          getBar(): string {
+            return "Bar!";
+          }
+        }
+
+        const fooService = bootstrap(FooService);
+
+        expect(fooService.doSomething()).toBeUndefined();
+      });
+
+      it("inject() should fail outside injection context", () => {
+        @injectable()
+        // eslint-disable-next-line @typescript-eslint/no-extraneous-class
+        class FooService {}
+
+        expect(() => inject(FooService, { lazy: true })).toThrowError(
+          "You can only invoke inject() or injectAsync() within an injection context",
+        );
+      });
+    });
+
+    describe("async", () => {
+      it("should construct lazily and once", async () => {
+        const barConstructed = vi.fn();
+        const otherConstructed = vi.fn();
+
+        @injectable()
+        class FooService {
+          constructor(private readonly barService = injectAsync(BarService)) {}
+
+          async doSomething(): Promise<string> {
+            return (await this.barService).getBar();
+          }
+        }
+
+        class BarService {
+          constructor(private readonly otherService = injectAsync(OtherService)) {
+            barConstructed();
+          }
+
+          async getBar(): Promise<string> {
+            await this.otherService;
+            return "Bar!";
+          }
+        }
+
+        // eslint-disable-next-line @typescript-eslint/no-extraneous-class
+        class OtherService {
+          constructor() {
+            otherConstructed();
+          }
+        }
+
+        beforeEach(() => {
+          barConstructed.mockReset();
+          otherConstructed.mockReset();
+        });
+
+        const container = new Container().bindAll(
+          {
+            provide: BarService,
+            useFactory: async (c) => {
+              await delay(50);
+              return new BarService(c.getAsync(OtherService));
+            },
+            async: true,
+          },
+          {
+            provide: OtherService,
+            useFactory: async () => {
+              await delay(50);
+              return new OtherService();
+            },
+            async: true,
+          },
+        );
+
+        const fooService = await container.getAsync(FooService);
+
+        expect(barConstructed).not.toHaveBeenCalled();
+        expect(otherConstructed).not.toHaveBeenCalled();
+
+        const result = await fooService.doSomething();
+
+        expect(barConstructed).toHaveBeenCalled();
+        expect(otherConstructed).toHaveBeenCalled();
+
+        expect(result).toBe("Bar!");
+
+        await fooService.doSomething();
+
+        expect(barConstructed).toHaveBeenCalledTimes(1);
+        expect(otherConstructed).toHaveBeenCalledTimes(1);
+      });
+
+      it("should work with optionals", async () => {
+        @injectable()
+        class FooService {
+          constructor(private readonly barService = injectAsync(BarService, { lazy: true, optional: true })) {}
+
+          async doSomething(): Promise<string | undefined> {
+            const barService = await this.barService();
+            return barService?.getBar();
+          }
+        }
+
+        class BarService {
+          getBar(): string {
+            return "Bar!";
+          }
+        }
+
+        const fooService = await bootstrapAsync(FooService);
+
+        expect(await fooService.doSomething()).toBeUndefined();
+      });
+
+      it("injectAsync() should fail outside injection context", async () => {
+        @injectable()
+        // eslint-disable-next-line @typescript-eslint/no-extraneous-class
+        class FooService {}
+
+        await expect(injectAsync(FooService, { lazy: true })).rejects.toThrowError(
+          "You can only invoke inject() or injectAsync() within an injection context",
+        );
+      });
     });
   });
 });

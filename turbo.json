@@ -7,10 +7,13 @@
       "persistent": true
     },
     "lint": {
-      "dependsOn": ["^lint"]
+      "outputs": []
     },
     "check-types": {
       "dependsOn": ["^check-types"]
+    },
+    "format": {
+      "outputs": []
     },
     "test": {
       "dependsOn": ["^test"]

@@ -16,7 +16,8 @@ export default defineConfig({
     },
 
     editLink: {
-      pattern: "https://github.com/needle-di/needle-di/edit/main/apps/docs/:path",
+      pattern:
+        "https://github.com/needle-di/needle-di/edit/main/apps/docs/:path",
     },
 
     lastUpdated: {
@@ -68,10 +69,11 @@ export default defineConfig({
         text: "Advanced",
         items: [
           { text: "Optional injection", link: "/advanced/optional-injection" },
-          { text: "Multi-injection", link: "/advanced/multi-injection" },
+          { text: "Multi injection", link: "/advanced/multi-injection" },
+          { text: "Async injection", link: "/advanced/async-injection" },
+          { text: "Lazy injection", link: "/advanced/lazy-injection" },
           { text: "Inheritance", link: "/advanced/inheritance" },
           { text: "Tree-shaking", link: "/advanced/tree-shaking" },
-          { text: "Async injection", link: "/advanced/async-injection" },
           { text: "Child containers", link: "/advanced/child-containers" },
         ],
       },

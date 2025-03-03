@@ -1,5 +1,5 @@
 import { type Provider, type SyncProvider } from "./providers.ts";
-import { type Token, toString } from "./tokens.ts";
+import { getToken, type Token, toString } from "./tokens.ts";
 import * as Guards from "./providers.ts";
 import { assertNever, retryOn } from "./utils.ts";
 import { Container } from "./container.ts";
@@ -8,6 +8,8 @@ import { Container } from "./container.ts";
  * @internal
  */
 export class Factory {
+  private readonly underConstruction: Provider<unknown>[] = [];
+
   constructor(private readonly container: Container) {}
 
   construct<T>(provider: Provider<T>, token: Token<T>): T[] {
@@ -15,31 +17,54 @@ export class Factory {
       throw new AsyncProvidersInSyncInjectionContextError(token);
     }
 
-    return this.doConstruct(provider);
+    try {
+      if (this.underConstruction.includes(provider)) {
+        const dependencyGraph = [...this.underConstruction, provider].map(getToken).map(toString);
+        throw new CircularDependencyError(dependencyGraph);
+      }
+
+      this.underConstruction.push(provider);
+      return this.doConstruct(provider);
+    } finally {
+      this.underConstruction.pop();
+    }
   }
 
   async constructAsync<T>(provider: Provider<T>): Promise<T[]> {
-    if (Guards.isAsyncProvider(provider)) {
-      return [await provider.useFactory(this.container)];
+    try {
+      if (this.underConstruction.includes(provider)) {
+        const dependencyGraph = [...this.underConstruction, provider].map(getToken).map(toString);
+        throw new CircularDependencyError(dependencyGraph);
+      }
+
+      this.underConstruction.push(provider);
+
+      if (Guards.isAsyncProvider(provider)) {
+        return [await provider.useFactory(this.container)];
+      }
+
+      // in class and constructor providers, we allow stuff to be synchronously injected,
+      // by just retrying when we encounter an async dependency down the road.
+      // todo: this feels like an ugly workaround, so let's create something nice for this.
+      if (Guards.isClassProvider(provider) || Guards.isConstructorProvider(provider)) {
+        const create = Guards.isConstructorProvider(provider)
+          ? () => [new provider()]
+          : () => [new provider.useClass()];
+
+        return retryOn(
+          AsyncProvidersInSyncInjectionContextError,
+          async () => create(),
+          async (error) => {
+            await this.container.getAsync(error.token, { multi: true, optional: true });
+          },
+        );
+      }
+
+      // all other types of providers are constructed synchronously anyway.
+      return this.doConstruct(provider);
+    } finally {
+      this.underConstruction.pop();
     }
-
-    // in class and constructor providers, we allow stuff to be synchronously injected,
-    // by just retrying when we encounter an async dependency down the road.
-    // todo: this feels like an ugly workaround, so let's create something nice for this.
-    if (Guards.isClassProvider(provider) || Guards.isConstructorProvider(provider)) {
-      const create = Guards.isConstructorProvider(provider) ? () => [new provider()] : () => [new provider.useClass()];
-
-      return retryOn(
-        AsyncProvidersInSyncInjectionContextError,
-        async () => create(),
-        async (error) => {
-          await this.container.getAsync(error.token, { multi: true, optional: true });
-        },
-      );
-    }
-
-    // all other types of providers are constructed synchronously anyway.
-    return this.doConstruct(provider);
   }
 
   private doConstruct<T>(provider: SyncProvider<T>): T[] {
@@ -68,6 +93,14 @@ class AsyncProvidersInSyncInjectionContextError<T> extends Error {
   constructor(public token: Token<T>) {
     super(
       `Some providers for token ${toString(token)} are async, please use injectAsync() or container.getAsync() instead`,
+    );
+  }
+}
+
+class CircularDependencyError extends Error {
+  constructor(graph: string[]) {
+    super(
+      `Detected circular dependency: ${graph.join(" -> ")}. Please change your dependency graph or use lazy injection instead.`,
     );
   }
 }

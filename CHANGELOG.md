@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.0](https://github.com/needle-di/needle-di/compare/v0.11.2...v0.12.0) (2025-03-03)
+
+
+### Features
+
+* add support for lazy injection ([#76](https://github.com/needle-di/needle-di/issues/76)) ([df5c01b](https://github.com/needle-di/needle-di/commit/df5c01b2a1d672296e32cfdee4f7aa57ba365a41))
+
 ## [0.11.2](https://github.com/needle-di/needle-di/compare/v0.11.1...v0.11.2) (2025-02-25)
 
 

@@ -108,3 +108,23 @@ export function assertSingle<T>(array: T[], errorProvider: () => unknown): T {
 export function assertNever(_: never): never {
   throw new Error("invalid state");
 }
+
+/**
+ * Executes a callback, wrapping its result in a Promise.
+ * Static version of `Promise.try()` (currently stage 3).
+ *
+ * @internal
+ * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise/try
+ */
+export async function promiseTry<T>(block: () => T | PromiseLike<T>): Promise<Awaited<T>> {
+  return await new Promise<T>((resolve) => resolve(block()));
+}
+
+/**
+ * Simple function that returns a Promise with a certain delay.
+ *
+ * @internal
+ */
+export function delay(delayInMs: number): Promise<void> {
+  return new Promise<void>((resolve) => setTimeout(resolve, delayInMs));
+}

@@ -589,7 +589,7 @@ describe("Container", () => {
     );
   });
 
-  it("requesting single value for multiple providers throws error", () => {
+  it("requesting single value for multiple providers throws error", async () => {
     const container = new Container();
 
     container.bindAll(
@@ -603,7 +603,7 @@ describe("Container", () => {
       "Requesting a single value for key, but multiple values were provided.",
     );
 
-    expect(container.getAsync("asyncKey")).rejects.toThrowError(
+    await expect(container.getAsync("asyncKey")).rejects.toThrowError(
       "Requesting a single value for asyncKey, but multiple values were provided.",
     );
   });
@@ -858,7 +858,7 @@ describe("Container", () => {
 
     expect(myService.printTokens()).toBe("Foo and Bar");
 
-    expect(container.getAsync(ServiceThatThrowsErrorInInit)).rejects.toThrowError("foo");
+    await expect(container.getAsync(ServiceThatThrowsErrorInInit)).rejects.toThrowError("foo");
   });
 
   it("should not support sync injection of async providers outside constructors", async () => {
@@ -906,7 +906,7 @@ describe("Container", () => {
       },
     );
 
-    expect(async () => await container.getAsync(MyService)).rejects.toThrowError(
+    await expect(() => container.getAsync(MyService)).rejects.toThrowError(
       "use injectAsync() or container.getAsync() instead",
     );
   });
@@ -951,5 +951,106 @@ describe("Container", () => {
     container.bindAll(FooService, BarService);
 
     expect(container.get(ExampleService, { multi: true })).toHaveLength(2);
+  });
+
+  it("should throw user-friendly error for circular dependencies", () => {
+    @injectable()
+    class App {
+      private foo = inject(Foo);
+    }
+
+    @injectable()
+    class Foo {
+      private bar = inject(Bar);
+
+      public lorem() {
+        return this.bar.lorem();
+      }
+
+      public ipsum() {
+        return this.bar.ipsum();
+      }
+    }
+
+    @injectable()
+    class Bar {
+      private baz = inject(Baz);
+
+      public lorem() {
+        return "lorem";
+      }
+
+      public ipsum() {
+        return this.baz.ipsum();
+      }
+    }
+
+    @injectable()
+    class Baz {
+      private foo = inject(Foo);
+
+      public lorem() {
+        return this.foo.lorem();
+      }
+
+      public ipsum() {
+        return "ipsum";
+      }
+    }
+
+    expect(() => bootstrap(App)).toThrowError("Detected circular dependency: App -> Foo -> Bar -> Baz -> Foo");
+  });
+
+  it("should support circular dependencies with lazy providers", () => {
+    @injectable()
+    class Foo {
+      private bar = inject(Bar);
+
+      public lorem() {
+        return this.bar.lorem();
+      }
+
+      public ipsum() {
+        return this.bar.ipsum();
+      }
+    }
+
+    @injectable()
+    class Bar {
+      private baz = inject(Baz);
+
+      public lorem() {
+        return "lorem";
+      }
+
+      public ipsum() {
+        return this.baz.ipsum();
+      }
+    }
+
+    @injectable()
+    class Baz {
+      private foo = inject(Foo, { lazy: true });
+
+      public lorem() {
+        return this.foo().lorem();
+      }
+
+      public ipsum() {
+        return "ipsum";
+      }
+    }
+
+    const foo = bootstrap(Foo);
+    const baz = bootstrap(Baz);
+
+    expect(foo).toBeTruthy();
+    expect(baz).toBeTruthy();
+
+    expect(foo.lorem()).toBe("lorem");
+    expect(foo.ipsum()).toBe("ipsum");
+
+    expect(baz.lorem()).toBe("lorem");
+    expect(baz.ipsum()).toBe("ipsum");
   });
 });

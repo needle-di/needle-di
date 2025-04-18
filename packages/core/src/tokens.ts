@@ -1,6 +1,7 @@
 import { type AbstractClass, type Class, isClassLike } from "./utils.ts";
 import { type Provider } from "./providers.ts";
 import * as Guards from "./providers.ts";
+import type { Container } from "./container.ts";
 
 /**
  * A token is a reference to a service in the dependency injection (DI) container.
@@ -26,11 +27,11 @@ export class InjectionToken<T> {
 type InjectionTokenOptions<T> =
   | {
       async: true;
-      factory: () => Promise<T>;
+      factory: (container: Container) => Promise<T>;
     }
   | {
       async?: false;
-      factory: () => T;
+      factory: (container: Container) => T;
     };
 
 /**

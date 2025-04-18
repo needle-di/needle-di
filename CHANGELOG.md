@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.1](https://github.com/needle-di/needle-di/compare/v0.12.0...v0.12.1) (2025-04-18)
+
+
+### Bug Fixes
+
+* **injection-token:** pass container API to injection token factory ([#79](https://github.com/needle-di/needle-di/issues/79)) ([b637ae6](https://github.com/needle-di/needle-di/commit/b637ae6c9abf8b507c01aaf77285e5a6862d5226))
+
 ## [0.12.0](https://github.com/needle-di/needle-di/compare/v0.11.2...v0.12.0) (2025-03-03)
 
 

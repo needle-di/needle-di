@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.0](https://github.com/needle-di/needle-di/compare/v0.12.1...v1.0.0) (2025-04-25)
+
+
+### Miscellaneous Chores
+
+* release 1.0.0 ([48f7d84](https://github.com/needle-di/needle-di/commit/48f7d84bf89e918c791328228ceb2dc305812bcb))
+
 ## [0.12.1](https://github.com/needle-di/needle-di/compare/v0.12.0...v0.12.1) (2025-04-18)
 
 

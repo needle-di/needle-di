@@ -43,8 +43,8 @@ jobs:
       - name: 'npm ci'
         run: npm ci
 
-      - name: 'npm run build -w apps/docs'
-        run: npm run build -w apps/docs
+      - name: 'npm run build'
+        run: npm run build
 
       - name: 'Upload artifact for Pages'
         uses: actions/upload-pages-artifact@v3

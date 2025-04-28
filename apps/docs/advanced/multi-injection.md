@@ -5,27 +5,31 @@ By default, when you bind an existing token again, it will overwrite any previou
 
 However, it is also possible to register multiple values for the same token:
 
-```typescript
+```ts twoslash
 import { Container } from "@needle-di/core";
+import { FooService } from "./foo.service";
 
 const container = new Container();
 
 container.bind({
   provide: FooService,
   multi: true,
-  factory: () => new FooService(123, "abc"),
+  useFactory: () => new FooService(),
 });
 
 container.bind({
   provide: FooService,
   multi: true,
-  factory: () => new FooService(456, "def"),
+  useFactory: () => new FooService(),
 });
 ```
 
 To inject both instances, you can pass `{ multi: true }` to the `inject()` function:
 
-```typescript
+```ts twoslash
+import { inject } from "@needle-di/core";
+import { FooService } from "./foo.service";
+
 class MyService {
   constructor(
     private fooServices = inject(FooService, { multi: true }),

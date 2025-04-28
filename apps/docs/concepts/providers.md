@@ -15,14 +15,15 @@ It's important to understand the terminology here:
 - A **provider** states how the service should be created.
 
 ::: details Check an example
-```typescript
+```ts twoslash
 import { Container } from "@needle-di/core";
+import { FooService } from "./foo.service";
 
 const container = new Container();
 
 container.bind({
-  provide: MyService,
-  useFactory: () => new MyService(),
+  provide: FooService,
+  useFactory: () => new FooService(),
 });
 ```
 
@@ -38,7 +39,7 @@ There are different types of providers.
 
 A class provider refers to a class constructor, which will be used construct a new instance.
 
-```typescript
+```ts
 container.bind({
   provide: Logger,
   useClass: Logger,
@@ -47,7 +48,7 @@ container.bind({
 
 This example can also be written with the shorthand:
 
-```typescript
+```ts
 container.bind(Logger);
 ```
 
@@ -55,7 +56,7 @@ This will register a singleton for `Logger` that gets lazily constructed.
 
 Note that `useClass` may also refer to a child class of `Logger`:
 
-```typescript
+```ts
 container.bind({
   provide: Logger,
   useClass: FileLogger,
@@ -68,7 +69,7 @@ Check out [inheritance support](/advanced/inheritance) for more information.
 
 A value provider refers to a static value.
 
-```typescript
+```ts
 container.bind({
   provide: MyService,
   useValue: new MyService(),
@@ -84,7 +85,7 @@ A factory provider refers to a factory function, which will only be invoked when
 time.
 This makes it ideal for lazy evaluation.
 
-```typescript
+```ts
 container.bind({
   provide: MyService,
   useFactory: () => new MyService(),
@@ -95,7 +96,7 @@ The value returned by the function will act as a singleton and will be reused.
 
 Note that you can use the `inject()` function inside this factory function, allowing you to inject other dependencies:
 
-```typescript
+```ts
 container.bind({
   provide: MyService,
   useFactory: () => new MyService(inject(FooService), inject(BarService)),
@@ -104,7 +105,7 @@ container.bind({
 
 It is also possible to access the container, which is passed to the `useFactory` function:
 
-```typescript
+```ts
 container.bind({
   provide: MyService,
   useFactory: (container) =>
@@ -117,7 +118,7 @@ container.bind({
 An existing provider is a special provider that refers to another provider, by specifying its token.
 This basically works like an alias. This can be useful for inheritance or [injection tokens](/concepts/tokens).
 
-```typescript
+```ts
 container.bind({
   provide: MyValidator,
   useClass: MyValidator,

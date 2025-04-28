@@ -8,8 +8,9 @@ will create the service on demand. Lazy injection could aso be a solution to ena
 
 In order to use lazy injection, just pass `{ lazy: true }`:
 
-```typescript
+```ts twoslash
 import { inject } from "@needle-di/core";
+import { FooService } from "./foo.service";
 
 class MyService {
   constructor(
@@ -19,7 +20,7 @@ class MyService {
   
   public doSomething() {
     // invoking the function will trigger the creation of `FooService`
-    this.fooService().somethingElse();
+    this.fooService().someMethod();
   }
 }
 ```

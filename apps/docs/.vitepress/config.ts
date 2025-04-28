@@ -1,4 +1,5 @@
 import { defineConfig } from "vitepress";
+import { transformerTwoslash } from "@shikijs/vitepress-twoslash";
 
 import packageJson from "../../../package.json" with { type: "json" };
 
@@ -9,6 +10,9 @@ export default defineConfig({
   title: "Needle DI",
   description: "A lightweight, type-safe Dependency Injection (DI) library",
   head: [["link", { rel: "icon", href: "/favicon.ico" }]],
+  markdown: {
+    codeTransformers: [transformerTwoslash()],
+  },
   themeConfig: {
     siteTitle: "Needle DI",
     search: {
@@ -59,9 +63,9 @@ export default defineConfig({
         text: "Concepts",
         items: [
           { text: "Binding", link: "/concepts/binding" },
+          { text: "Providers", link: "/concepts/providers" },
           { text: "Containers", link: "/concepts/containers" },
           { text: "Injection", link: "/concepts/injection" },
-          { text: "Providers", link: "/concepts/providers" },
           { text: "Tokens", link: "/concepts/tokens" },
         ],
       },

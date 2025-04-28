@@ -7,7 +7,7 @@ It is also possible to use a provider with an asynchronous factory function.
 All you have to do, is passing `async: true`. This will require you to return a `Promise` in your factory function.
 This allows you to also use an `async` function:
 
-```typescript
+```ts
 container.bind({
   provide: FooService,
   async: true,
@@ -22,19 +22,25 @@ container.bind({
 When you want to obtain this from the DI container, you will have to use `container.getAsync(token)` or
 `injectAsync(token)`. Since this returns a `Promise`, you can use `await` here.
 
-```typescript
+```ts twoslash
+import { container } from "./container";
+import { FooService } from "./foo.service";
+
 const fooService = await container.getAsync(FooService);
+//    ^?
+//
 ```
 
-If you try to use `container.get(token)` or `inject(token)` for an async provider, an error will be thrown,
-as these methods only support synchronous injection. This restriction also applies if any indirect dependencies are async.
+If you try to use `container.get()` or `inject()` for an async provider, an error will be thrown,
+as these methods only support synchronous injection. This restriction also applies if any of the indirect dependencies 
+is async.
 
 ## Synchronous constructor injection
 
 
 You can inject your async dependencies synchronously, as long as you're in an async context.
 
-```typescript
+```ts
 @injectable()
 class MyService {
   constructor(

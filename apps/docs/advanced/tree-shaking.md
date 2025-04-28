@@ -23,8 +23,9 @@ Let's imagine a library with a class `SomeHeavyClass` that depends on a lot of c
 Since we cannot decorate this class, the alternative is to bind it using
 an [injection token](/concepts/tokens#injectiontoken-t):
 
-```typescript
-import { InjectionToken } from "@needle-di/core";
+```ts
+import { InjectionToken, Container } from "@needle-di/core";
+import { SomeHeavyClass } from "./some-heavy-library";
 
 const MY_TOKEN = new InjectionToken<SomeHeavyClass>("MY_TOKEN");
 
@@ -36,15 +37,13 @@ container.bind({
 });
 ```
 
-However, if there is an entry point in which there are no other references to `MY_TOKEN` and `SomeHeavyClass`, it will
-NOT be tree-shaken.
-
-This is because it is still referred by the container itself.
+However, this will **NOT** be tree-shaken; even when there are no references to `MY_TOKEN` and `SomeHeavyClass`. This is
+because it is still referred by the container itself.
 
 However, there also an option to provide a `factory` function in your `InjectionToken`,
-which will remove the need to bind it to your container:
+removing the need to manually bind it to your container:
 
-```typescript
+```ts
 import { InjectionToken } from "@needle-di/core";
 
 const MY_TOKEN = new InjectionToken<SomeHeavyClass>(
@@ -62,9 +61,8 @@ container.bind({ // [!code --]
 }); // [!code --]
 ```
 
-This basically enables [auto-binding](/concepts/binding#auto-binding): there is no need anymore to manually register
-this token in your container.
-Since it holds a factory function, the container can automatically construct it when you obtain it for the first time.
+This effectively enables [auto-binding](/concepts/binding#auto-binding): since the token holds a factory function, the container will automatically
+construct it when you obtain it for the first time.
 
 But more importantly, this will make your token **tree-shakeable**: when there are no references to your injection
 token, everything associated with your token will be removed from your bundle.

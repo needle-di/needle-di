@@ -7,6 +7,7 @@
       "persistent": true
     },
     "lint": {
+      "dependsOn": ["^build"],
       "outputs": []
     },
     "check-types": {

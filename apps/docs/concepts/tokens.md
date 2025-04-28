@@ -9,7 +9,7 @@ Needle DI allows you to use many different types of tokens.
 
 When the service that you provide is a class, you can use its constructor reference as a token.
 
-```typescript
+```ts
 container.bind({
   provide: FooService,
   useValue: new FooService(),
@@ -28,10 +28,15 @@ Therefore, Needle DI offers some alternatives.
 
 You can also use any `string` or `symbol` as injection token:
 
-```typescript
+```ts twoslash
+import { Container } from "@needle-di/core";
+import { MyConfig } from "./my-config";
+
 // create some tokens
 const MY_CONFIG = "my-config";
 const MY_MAGIC_NUMBER = Symbol("my-magic-number");
+
+const container = new Container();
 
 // bind some values using providers
 container.bind({
@@ -65,31 +70,35 @@ basically a unique token object, that is used by reference.
 > [!TIP]
 > When using TypeScript, this token can also hold a generic type. This enables better type-checking.
 
-```typescript
-import { InjectionToken } from "@needle-di/core";
+```ts twoslash
+import { Container, InjectionToken } from "@needle-di/core";
+import { MyConfig } from "./my-config";
 
 // create some injection tokens
 const MY_NUMBER = new InjectionToken<number>("MY_NUMBER");
 const MY_CONFIG = new InjectionToken<MyConfig>("MY_CONFIG");
 
+const container = new Container();
+
 // bind some values using providers
 container.bind({
   provide: MY_NUMBER,
-  useValue: 42,
-  //        ^? should be `number`
+  useValue: 42, // should satisfy `number`
 });
 
 container.bind({
   provide: MY_CONFIG,
-  useValue: { foo: "bar" },
-  //        ^? should be `MyConfig`
+  useValue: { foo: "bar" }, // should satisfy `MyConfig`
 });
 
 // retrieve the values by their tokens
 const myNumber = container.get(MY_NUMBER);
-//       ^? Type will be inferred as `number`
+//     ^? Type will be inferred as `number`
+
+
 const myConfig = container.get(MY_CONFIG);
-//       ^? Type will be inferred as `MyConfig`
+//     ^? Type will be inferred as `MyConfig`
+//
 ```
 
 This maximizes type-safety since both `container.bind()`, `container.get()` and `inject()` will check and infer the

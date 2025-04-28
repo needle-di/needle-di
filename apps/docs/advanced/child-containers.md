@@ -5,7 +5,11 @@ ancestor). However, it also allows you to **override specific providers** or def
 
 ## Example
 
-```ts
+```ts twoslash
+import { Container } from "@needle-di/core";
+
+import { LOGGER, MyLogger, OtherLogger } from "./logger";
+
 const parent = new Container();
 const child1 = parent.createChild();
 const child2 = parent.createChild();

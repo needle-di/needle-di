@@ -44,9 +44,14 @@
  * -------------------------------------------------------------------------- */
 
 :root {
+    /*--vp-c-yellow-1: #915930;*/
+    /*--vp-c-yellow-2: #946300;*/
+    /*--vp-c-yellow-3: #9f6a00;*/
+
     --vp-c-yellow-1: #F77101;
     --vp-c-yellow-2: #da8b17;
     --vp-c-yellow-3: #F77101;
+
     --vp-c-yellow-soft: rgba(234, 179, 8, 0.14);
 
     --vp-c-default-1: var(--vp-c-gray-1);
@@ -76,6 +81,10 @@
 }
 
 .dark {
+    /*--vp-c-yellow-1: #f9b44e;*/
+    /*--vp-c-yellow-2: #da8b17;*/
+    /*--vp-c-yellow-3: #a46a0a;*/
+
     --vp-c-yellow-1: #F77101;
     --vp-c-yellow-2: #da8b17;
     --vp-c-yellow-3: #ac4f00;

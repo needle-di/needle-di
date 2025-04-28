@@ -11,7 +11,7 @@ for abstractions and interfaces.
 
 Given the following class structure:
 
-```typescript
+```ts
 abstract class ExampleService {
   /* ... */
 }
@@ -30,13 +30,16 @@ class BarService extends ExampleService {
 This will automatically bind `FooService` and `BarService`, but it will also automatically
 bind two multi-providers for the token `ExampleService`:
 
-```typescript
+```ts twoslash
+import { container } from "./container";
+import { ExampleService, FooService, BarService } from "./example.service";
+
 const fooService = container.get(FooService);
 const barService = container.get(BarService);
 
+// Will be the same instances as "fooService" and "barService':
 const myServices = container.get(ExampleService, { multi: true });
-//    ^? Type will be inferred as `ExampleService[]`
-//        and will be the same instances as "fooService" and "barService'
+//    ^?
 ```
 
 > [!IMPORTANT]
@@ -46,7 +49,7 @@ const myServices = container.get(ExampleService, { multi: true });
 > 
 > To prevent this, consider to register your subclasses explicitly using [manual binding](#manual-binding):
 > 
-> ```typescript
+> ```ts
 > container.bindAll(FooService, BarService);
 > ```
 
@@ -56,7 +59,9 @@ If you bind something that has a parent class, a multi-provider for the parent c
 
 Given the following example:
 
-```typescript
+```ts twoslash
+import { Container } from "@needle-di/core";
+
 abstract class ExampleService {
   /* ... */
 }
@@ -69,6 +74,8 @@ class BarService extends ExampleService {
   /* ... */
 }
 
+const container = new Container();
+
 container.bindAll(
   FooService,
   BarService,
@@ -77,7 +84,7 @@ container.bindAll(
 
 The container will automatically register the following bindings internally:
 
-```typescript
+```ts
 container.bindAll(
   {
     provide: ExampleService,
@@ -93,13 +100,17 @@ container.bindAll(
 ```
 
 This enables you to inject all instances of `ExampleService` using multi-injection:
-```typescript
+
+```ts twoslash
+import { container } from "./container";
+import { ExampleService, FooService, BarService } from "./example.service";
+
 const fooService = container.get(FooService);
 const barService = container.get(BarService);
 
+// Will be the same instances as "fooService" and "barService':
 const myServices = container.get(ExampleService, { multi: true });
-//    ^? Type will be inferred as `ExampleService[]`
-//        and will be the same instances as "fooService" and "barService'
+//    ^?
 ```
 
 This even works with multiple levels of inheritance.
@@ -109,7 +120,9 @@ This even works with multiple levels of inheritance.
 If you're using TypeScript interfaces instead, you should use [injection tokens](/concepts/tokens#injectiontoken-t) instead. 
 This is because TypeScript interfaces don't exist at runtime and therefore cannot be used as tokens.
 
-```typescript
+```ts twoslash
+import { Container, InjectionToken } from "@needle-di/core";
+
 interface Logger {
   info(): void;
 }
@@ -128,6 +141,8 @@ class ConsoleLogger implements Logger {
 
 const LOGGER = new InjectionToken<Logger>('LOGGER');
 
+const container = new Container();
+
 container.bindAll(
   {
     provide: LOGGER,
@@ -140,4 +155,7 @@ container.bindAll(
     useClass: ConsoleLogger,
   },
 );
+
+const loggers = container.get(LOGGER, { multi: true });
+//    ^?
 ```

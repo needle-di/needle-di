@@ -5,7 +5,7 @@
 The dependency injection (DI) container will keep track of all bindings and hold the actual instances of your services.
 To create it, simply construct one:
 
-```typescript
+```ts twoslash
 import { Container } from "@needle-di/core";
 
 const container = new Container();
@@ -17,7 +17,7 @@ Every DI container keeps track of its own service instances separately.
 
 You can bind services using the `.bind()` or `.bindAll()` methods:
 
-```typescript
+```ts
 container
   .bind(FooService)
   .bind({
@@ -39,29 +39,34 @@ container.bindAll(
 
 Learn more about the different types of [providers](./providers) you can use for binding.
 
-## Constructing services
+## Bootstrapping
 
-To obtain something from the container, you can use `container.get(token)`:
+### Using `.get()`
 
-```typescript
+To request a service from the container, you can use the `.get()` method:
+
+```ts twoslash
+import { Container } from "@needle-di/core";
+import { FooService } from "./foo.service";
+
+const container = new Container();
 const fooService = container.get(FooService);
-//    ^? Type will be inferred as `FooService`
+//     ^?
 ```
 
-This will create a new `FooService`, or return the existing one if it was requested before.
+This will either create a new `FooService`, or return the existing one if requested before.
 
-> [!NOTE]
-> To inject dependencies into classes, use [constructor injection](./injection#constructor-injection) instead.
-
-## `bootstrap()` shorthand
+### Using `bootstrap()`
 
 If you don't need to interact with the DI container at all, you can also use the `bootstrap()` shorthand function
 instead. This will internally create a new container and return the requested service directly:
 
-```typescript
+```ts twoslash
 import { bootstrap } from "@needle-di/core";
+import { BarService } from "./bar.service";
 
 const barService = bootstrap(BarService);
+//     ^?
 ```
 
 This is useful if you solely depend on [auto-binding](/concepts/binding#auto-binding)
@@ -81,7 +86,10 @@ You can also create a child container, which can be used to override a provider 
 
 To do so, use the `.createChild()` method:
 
-```ts
+```ts twoslash
+import { Container } from "@needle-di/core";
+import { LOGGER, MyLogger, OtherLogger } from "./logger";
+
 const parent = new Container();
 parent.bind({ provide: LOGGER, useClass: MyLogger });
 

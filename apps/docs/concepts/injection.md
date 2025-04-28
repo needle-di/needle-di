@@ -12,16 +12,20 @@ of your class explicit, more type-safe, and allows for easier unit testing.
 Instead of using `container.get(token)`, you can use the `inject(token)` function here,
 so no reference to an actual container is needed.
 
-```typescript
+```ts twoslash
 import { inject, injectable } from "@needle-di/core";
+
+import { FooService } from "./foo.service";
+import { BarService } from "./bar.service";
 
 @injectable()
 class MyService {
   constructor(
     private fooService = inject(FooService),
     private barService = inject(BarService),
-    //      ^? Type will be inferred as `BarService`
-  ) {}
+    //                    ^?
+  ) {
+  }
 
   // ...
 }
@@ -44,8 +48,11 @@ class MyService {
 
 Alternatively, you can also initialize your dependencies as (private) fields:
 
-```typescript
+```ts twoslash
 import { inject, injectable } from "@needle-di/core";
+
+import { FooService } from "./foo.service";
+import { BarService } from "./bar.service";
 
 @injectable()
 class MyService {

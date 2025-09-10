@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "lib": ["es2023"],
+    "lib": ["es2023", "DOM"],
     "module": "nodenext",
     "target": "es2022",
 
@@ -35,6 +35,6 @@
     "noImplicitOverride": true,
 
     // Allow "Deno"-style imports
-    "allowImportingTsExtensions": true,
+    "allowImportingTsExtensions": true
   }
 }

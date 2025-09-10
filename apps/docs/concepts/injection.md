@@ -94,7 +94,6 @@ So instead of:
 }
 ```
 Please use:
-So instead of:
 ```ts
 {
   provide: LOGGER,

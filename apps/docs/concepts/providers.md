@@ -27,7 +27,7 @@ container.bind({
 });
 ```
 
-In this case, `MyService` is the **token**, `new MyService()` is the **service** (or **value**), and the
+In this case, `FooService` is the **token**, `new FooService()` is the **service** (or **value**), and the
 `useFactory` function is the **provider** that states how this service will be created.
 :::
 

@@ -69,12 +69,15 @@ describe("Container API", () => {
 
   it("has", async () => {
     const container = new Container();
+    const childContainer = container.createChild();
     const token = new InjectionToken<MyService>("some-token");
 
     expect(container.has(token)).toBe(false);
+    expect(childContainer.has(token)).toBe(false);
 
     container.bind({ provide: token, useClass: MyService });
     expect(container.has(token)).toBe(true);
+    expect(childContainer.has(token)).toBe(true);
 
     // has shall not create a provider, even if it is async
     const asyncToken = new InjectionToken<MyService>("some-async-token");

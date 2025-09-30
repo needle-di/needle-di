@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1](https://github.com/needle-di/needle-di/compare/v1.0.0...v1.0.1) (2025-09-30)
+
+
+### Bug Fixes
+
+* **container:** also check parent container when calling `has()` method ([#89](https://github.com/needle-di/needle-di/issues/89)) ([42e5ae3](https://github.com/needle-di/needle-di/commit/42e5ae3b87c2b18a9a2e0a895af7f4b4865c5f96))
+
 ## [1.0.0](https://github.com/needle-di/needle-di/compare/v0.12.1...v1.0.0) (2025-04-25)
 
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/needle-di/needle-di/compare/v1.0.1...v1.1.0) (2025-09-30)
+
+
+### Features
+
+* unbind services to enable cleaning up resources ([#91](https://github.com/needle-di/needle-di/issues/91)) ([a16cde6](https://github.com/needle-di/needle-di/commit/a16cde6fe3e6dcc918a8dc2a08ed9a520492abc9))
+
 ## [1.0.1](https://github.com/needle-di/needle-di/compare/v1.0.0...v1.0.1) (2025-09-30)
 
 

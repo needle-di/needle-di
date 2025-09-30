@@ -168,6 +168,32 @@ export class Container {
   }
 
   /**
+   * Unbinds a provider.
+   *
+   * {@link https://needle-di.io/concepts/binding.html#binding}
+   */
+  public unbind<T>(provider: Provider<T>): this {
+    const token = getToken(provider);
+
+    this.providers.delete(token);
+    this.singletons.delete(token);
+
+    return this;
+  }
+
+  /**
+   * Unbinds all providers.
+   *
+   * {@link https://needle-di.io/concepts/binding.html#binding}
+   */
+  public unbindAll(): this {
+    this.providers.clear();
+    this.singletons.clear();
+
+    return this;
+  }
+
+  /**
    * Retrieves a service from this container.
    *
    * {@link https://needle-di.io/concepts/containers.html}

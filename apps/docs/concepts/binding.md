@@ -70,6 +70,11 @@ const fooService = container.get(FooService);
 
 This is the same as applying a decorator to `FooService`.
 
+## Clear binding
+
+To clear a binding, you can use the `.unbind()` or `.unbindAll()` method. This will also remove any instances of the
+service from the container.
+
 ***
 
 There are many different ways to bind services,

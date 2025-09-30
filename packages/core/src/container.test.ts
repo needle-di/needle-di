@@ -128,4 +128,26 @@ describe("Container API", () => {
       expect(() => container3.get("b")).toThrowError("No provider(s) found for b");
     });
   });
+
+  it("should unbind a single service", () => {
+    const container = new Container();
+
+    container.bind({ provide: MyService, useClass: MyService });
+
+    expect(myServiceConstructorSpy).toHaveBeenCalledTimes(0);
+
+    const myService1 = container.get(MyService);
+    const myService2 = container.get(MyService);
+
+    expect(myServiceConstructorSpy).toHaveBeenCalledTimes(1);
+    expect(myService1).toBe(myService2);
+
+    container.unbind(MyService);
+
+    const myService3 = container.get(MyService);
+
+    expect(myServiceConstructorSpy).toHaveBeenCalledTimes(2);
+    expect(myService3).not.toBe(myService1);
+    expect(myService3).not.toBe(myService2);
+  });
 });

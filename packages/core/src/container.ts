@@ -332,11 +332,7 @@ export class Container {
    * Returns whether the container has one or more providers for this token.
    */
   public has<T>(token: Token<T>): boolean {
-    let found = this.providers.has(token);
-    if (!found && this.parent) {
-      return this.parent.has(token);
-    }
-    return found;
+    return this.providers.has(token) || (this.parent?.has(token) ?? false);
   }
 
   private autoBindIfNeeded<T>(token: Token<T>) {

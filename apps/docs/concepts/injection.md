@@ -63,7 +63,7 @@ class MyService {
   // ...
 }
 ```
-Although this is less verbose, this will not allow you to pass in those dependencies when you construct the cass manually, e.g. in unit tests.
+Although this is less verbose, this will not allow you to pass in those dependencies when you construct the class manually, e.g. in unit tests.
 
 ## About the `inject()` and `injectAsync()` functions
 
@@ -105,5 +105,28 @@ Please use:
 }
 ```
 :::
+
+## Manual Injection
+
+Situations where classes aren't used but rather functions can still benefit from
+dependency injection.
+
+In these cases, manually passing the singleton container instance as an argument
+to the function and using the `.get()` function within provides the same practical
+functionality as using classes with decorators, just with reduced ergonomics.
+
+```ts
+import type { Container } from "@needle-di/core";
+
+import { FooService } from "./foo.service";
+import { BarService } from "./bar.service";
+
+const createMyService = (container: Container) => {
+  fooService = container.get(FooService);
+  barService = container.get(BarService);
+
+  // ...
+}
+```
 
 [parameter decorators]: https://github.com/tc39/proposal-class-method-parameter-decorators

@@ -1054,3 +1054,24 @@ describe("Container", () => {
     expect(baz.ipsum()).toBe("ipsum");
   });
 });
+
+it("should support reusing async providers with `ExistingProvider`", async () => {
+  const container = new Container();
+
+  container.bindAll(
+    { provide: "1", async: true, useFactory: async () => "one" },
+    { provide: "2", async: true, useFactory: async () => "two" },
+
+    { provide: "alias1", useExisting: "1" },
+    { provide: "alias2", useExisting: "2" },
+
+    { provide: "other1", useExisting: "1" },
+    { provide: "other2", useExisting: "alias2" },
+  );
+
+  expect(await container.getAsync("alias1")).toBe("one");
+  expect(await container.getAsync("alias2")).toBe("two");
+
+  expect(await container.getAsync("other1")).toBe("one");
+  expect(await container.getAsync("other2")).toBe("two");
+});

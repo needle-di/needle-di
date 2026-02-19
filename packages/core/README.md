@@ -70,7 +70,7 @@ Check out our docs on [https://needle-di.io](https://needle-di.io/concepts/bindi
 
 License under the MIT License (MIT)
 
-Copyright (c) 2024 - 2025 Dirk Luijk
+Copyright (c) 2024 - 2026 Dirk Luijk
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

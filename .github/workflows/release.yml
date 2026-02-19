@@ -1,9 +1,8 @@
-name: 'Release'
+name: "Release"
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
 
 permissions:
   contents: write
@@ -13,39 +12,37 @@ permissions:
 jobs:
   release-please:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
+
     steps:
-      - name: 'Release please!'
+      - name: "Release please!"
         id: release
         uses: googleapis/release-please-action@v4
         with:
           token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
 
-      - name: 'Clone repository (if release)'
+      - name: "Clone repository (if release)"
         if: ${{ steps.release.outputs.release_created }}
         uses: actions/checkout@v4
 
-      - name: 'Install Node.js (if release)'
+      - name: "Install Node.js (if release)"
         if: ${{ steps.release.outputs.release_created }}
         uses: actions/setup-node@v4
         with:
-          node-version: 22
-          registry-url: 'https://registry.npmjs.org'
+          node-version: 24
+          registry-url: "https://registry.npmjs.org"
 
-      - name: 'npm ci (if release)'
+      - name: "npm ci (if release)"
         if: ${{ steps.release.outputs.release_created }}
         run: npm ci
 
-      - name: 'npx jsr publish --allow-dirty (if release)'
+      - name: "npx jsr publish --allow-dirty (if release)"
         if: ${{ steps.release.outputs.release_created }}
         run: npx jsr publish --allow-dirty
 
-      - name: 'npm run build (if release)'
+      - name: "npm run build (if release)"
         if: ${{ steps.release.outputs.release_created }}
         run: npm run build
 
-      - name: 'npm publish (if release)'
+      - name: "Publish workspaces to npm (if release)"
         if: ${{ steps.release.outputs.release_created }}
         run: npm publish --workspace 'packages/**'

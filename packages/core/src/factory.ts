@@ -60,6 +60,10 @@ export class Factory {
         );
       }
 
+      if (Guards.isExistingProvider(provider)) {
+        return await this.container.getAsync(provider.useExisting, { multi: true });
+      }
+
       // all other types of providers are constructed synchronously anyway.
       return this.doConstruct(provider);
     } finally {

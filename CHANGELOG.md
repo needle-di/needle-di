@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/needle-di/needle-di/compare/v1.1.0...v1.1.1) (2026-02-19)
+
+
+### Bug Fixes
+
+* **factory:** resolve ExistingProvider via getAsync in async context ([#98](https://github.com/needle-di/needle-di/issues/98)) ([1b2d5b0](https://github.com/needle-di/needle-di/commit/1b2d5b07e7446aa9bc9e925beee79918532de029))
+
 ## [1.1.0](https://github.com/needle-di/needle-di/compare/v1.0.1...v1.1.0) (2025-09-30)
 
 

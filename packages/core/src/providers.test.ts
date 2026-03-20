@@ -467,6 +467,55 @@ describe("Providers", () => {
       expect(parent.get("tokenA", { multi: true })).toEqual(["a1", "a2"]);
       expect(child.get("tokenA", { multi: true })).toEqual(["a3", "a4"]);
     });
+
+    it("should resolve async providers from parent via getAsync()", async () => {
+      const parent = new Container();
+      const child = parent.createChild();
+      const grandChild = child.createChild();
+
+      parent.bind({ provide: "tokenA", async: true, useFactory: async () => ["a"] });
+      child.bind({ provide: "tokenB", async: true, useFactory: async () => ["b"] });
+      grandChild.bind({ provide: "tokenC", async: true, useFactory: async () => ["c"] });
+
+      expect(await grandChild.getAsync("tokenA")).toEqual(["a"]);
+      expect(await grandChild.getAsync("tokenB")).toEqual(["b"]);
+      expect(await grandChild.getAsync("tokenC")).toEqual(["c"]);
+
+      expect(await child.getAsync("tokenA")).toEqual(["a"]);
+      expect(await child.getAsync("tokenB")).toEqual(["b"]);
+      await expect(child.getAsync("tokenC")).rejects.toThrowError("No provider(s) found for tokenC");
+
+      expect(await parent.getAsync("tokenA")).toEqual(["a"]);
+      await expect(parent.getAsync("tokenB")).rejects.toThrowError("No provider(s) found for tokenB");
+    });
+
+    it("should reuse async singletons from their parent via getAsync()", async () => {
+      const parent = new Container();
+      const child = parent.createChild();
+      const grandChild = child.createChild();
+
+      parent.bind({ provide: "tokenA", async: true, useFactory: async () => ["a"] });
+      child.bind({ provide: "tokenB", async: true, useFactory: async () => ["b"] });
+
+      const a1 = await parent.getAsync("tokenA");
+      const a2 = await grandChild.getAsync("tokenA");
+      const a3 = await child.getAsync("tokenA");
+
+      const b1 = await child.getAsync("tokenB");
+      const b2 = await grandChild.getAsync("tokenB");
+
+      expect(a1).toBe(a2);
+      expect(a2).toBe(a3);
+
+      expect(b1).toBe(b2);
+    });
+
+    it("should return undefined for optional async tokens not found in parent", async () => {
+      const parent = new Container();
+      const child = parent.createChild();
+
+      expect(await child.getAsync("missing", { optional: true })).toBeUndefined();
+    });
   });
 
   describe("Lazy injection", () => {

@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.2](https://github.com/needle-di/needle-di/compare/v1.1.1...v1.1.2) (2026-03-31)
+
+
+### Bug Fixes
+
+* **container:** traverse parent container in getAsync() ([#100](https://github.com/needle-di/needle-di/issues/100)) ([c7ad14d](https://github.com/needle-di/needle-di/commit/c7ad14d963b3997634769537dbe3190f6ec3467c))
+
 ## [1.1.1](https://github.com/needle-di/needle-di/compare/v1.1.0...v1.1.1) (2026-02-19)
 
 

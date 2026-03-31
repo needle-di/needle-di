@@ -311,6 +311,9 @@ export class Container {
       const optional = options?.optional ?? false;
 
       if (!this.providers.has(token)) {
+        if (this.parent) {
+          return this.parent.getAsync(token, { ...options, lazy: false });
+        }
         if (optional) {
           return undefined;
         }

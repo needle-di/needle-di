@@ -1,5 +1,6 @@
 import { Container } from "./container.ts";
 import type { Token } from "./tokens.ts";
+import { promiseTry } from "./utils.ts";
 
 /**
  * Injects a service within the current injection context, using the token provided.
@@ -107,13 +108,17 @@ class InjectionContext implements Context {
     }
   }
 
-  async runAsync<T>(block: (container: Container) => Promise<T> | T): Promise<T> {
+  runAsync<T>(block: (container: Container) => Promise<T> | T): Promise<T> {
     const originalContext = _currentContext;
     try {
       // eslint-disable-next-line @typescript-eslint/no-this-alias
       _currentContext = this;
-      return await block(this.container);
+      return promiseTry(() => block(this.container));
     } finally {
+      // The context must be restored synchronously, as soon as the block's synchronous
+      // prefix has returned its promise. Holding it across the `await` (i.e. until the
+      // promise settles) leaks this context to unrelated code that runs while the block
+      // is suspended, making `inject()`/`injectAsync()` resolve from the wrong container.
       _currentContext = originalContext;
     }
   }

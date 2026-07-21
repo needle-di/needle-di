@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.3](https://github.com/needle-di/needle-di/compare/v1.1.2...v1.1.3) (2026-07-21)
+
+
+### Bug Fixes
+
+* remove underConstruction entries by identity so concurrent async constructions can settle in any order ([#104](https://github.com/needle-di/needle-di/issues/104)) ([5de8b5b](https://github.com/needle-di/needle-di/commit/5de8b5b2dd620ba4601cc0643e387df55c89f464))
+* restore the injection context synchronously so suspended async constructions cannot leak it ([#105](https://github.com/needle-di/needle-di/issues/105)) ([2882589](https://github.com/needle-di/needle-di/commit/28825895fa6c1103de6ae903087cea9d8a678c64))
+
 ## [1.1.2](https://github.com/needle-di/needle-di/compare/v1.1.1...v1.1.2) (2026-03-31)
 
 

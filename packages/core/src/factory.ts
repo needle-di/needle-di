@@ -3,6 +3,7 @@ import { getToken, type Token, toString } from "./tokens.ts";
 import * as Guards from "./providers.ts";
 import { assertNever, retryOn } from "./utils.ts";
 import { Container } from "./container.ts";
+import { injectionContext } from "./context.ts";
 
 /**
  * @internal
@@ -53,7 +54,10 @@ export class Factory {
 
         return retryOn(
           AsyncProvidersInSyncInjectionContextError,
-          async () => create(),
+          // retries run in a later tick, when the original injection context is no longer
+          // active, so each attempt must explicitly (re-)enter the injection context for
+          // the field initializers' inject() calls to work.
+          async () => injectionContext(this.container).run(() => create()),
           async (error) => {
             await this.container.getAsync(error.token, { multi: true, optional: true });
           },

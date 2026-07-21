@@ -127,6 +127,85 @@ describe("Container API", () => {
       expect(() => container3.get("e")).toThrowError("No provider(s) found for b");
       expect(() => container3.get("b")).toThrowError("No provider(s) found for b");
     });
+
+    // https://github.com/needle-di/needle-di/issues/103
+    it("should not leak the injection context of a suspended async construction", async () => {
+      const tokenA = new InjectionToken<string>("A");
+      const tokenB = new InjectionToken<string>("B");
+      const tokenT = new InjectionToken<{ a: string; b: string }>("T");
+      const tokenT2 = new InjectionToken<{ a: string; b: string }>("T2");
+
+      let releaseA!: () => void;
+      const aGate = new Promise<void>((resolve) => (releaseA = resolve));
+
+      const parent = new Container();
+      parent.bind({
+        provide: tokenA,
+        async: true,
+        useFactory: async () => {
+          await aGate; // suspend: the parent's injection context must not stay active meanwhile
+          return "a-from-parent";
+        },
+      });
+      parent.bind({ provide: tokenB, useValue: "b-from-parent" });
+
+      const child = parent.createChild();
+      child.bind({ provide: tokenB, useValue: "b-from-child" });
+      child.bind({
+        provide: tokenT, // bound on the child: its injections should resolve child-first
+        async: true,
+        useFactory: async () => {
+          const aPromise = injectAsync(tokenA); // descends into the parent and suspends there
+          const bPromise = injectAsync(tokenB); // must not read a leaked parent context
+          return { a: await aPromise, b: await bPromise };
+        },
+      });
+      child.bind({
+        provide: tokenT2, // control case: identical, but B injected before A
+        async: true,
+        useFactory: async () => {
+          const bPromise = injectAsync(tokenB);
+          const aPromise = injectAsync(tokenA);
+          return { a: await aPromise, b: await bPromise };
+        },
+      });
+
+      const tPending = child.getAsync(tokenT);
+      releaseA();
+
+      expect(await tPending).toEqual({ a: "a-from-parent", b: "b-from-child" });
+      expect(await child.getAsync(tokenT2)).toEqual({ a: "a-from-parent", b: "b-from-child" });
+    });
+
+    // https://github.com/needle-di/needle-di/issues/103
+    it("should not allow inject() outside an injection context while an async construction is suspended", async () => {
+      const token = new InjectionToken<string>("suspended");
+
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => (release = resolve));
+
+      const container = new Container();
+      container.bind({ provide: "value", useValue: "some-value" });
+      container.bind({
+        provide: token,
+        async: true,
+        useFactory: async () => {
+          await gate;
+          return "done";
+        },
+      });
+
+      const pending = container.getAsync(token);
+
+      // While the construction above is suspended, unrelated code must still be
+      // outside any injection context.
+      expect(() => inject("value")).toThrowError(
+        "You can only invoke inject() or injectAsync() within an injection context",
+      );
+
+      release();
+      await expect(pending).resolves.toBe("done");
+    });
   });
 
   it("should unbind a single service", () => {

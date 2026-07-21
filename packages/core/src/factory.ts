@@ -32,14 +32,14 @@ export class Factory {
   }
 
   async constructAsync<T>(provider: Provider<T>): Promise<T[]> {
+    if (this.underConstruction.includes(provider)) {
+      const dependencyGraph = [...this.underConstruction, provider].map(getToken).map(toString);
+      throw new CircularDependencyError(dependencyGraph);
+    }
+
+    this.underConstruction.push(provider);
+
     try {
-      if (this.underConstruction.includes(provider)) {
-        const dependencyGraph = [...this.underConstruction, provider].map(getToken).map(toString);
-        throw new CircularDependencyError(dependencyGraph);
-      }
-
-      this.underConstruction.push(provider);
-
       if (Guards.isAsyncProvider(provider)) {
         return [await provider.useFactory(this.container)];
       }
@@ -71,7 +71,13 @@ export class Factory {
       // all other types of providers are constructed synchronously anyway.
       return this.doConstruct(provider);
     } finally {
-      this.underConstruction.pop();
+      // Concurrent async constructions can settle in any order, so `pop()` might remove
+      // another in-flight construction's entry and leave our own entry stranded, causing
+      // phantom `CircularDependencyError`s on retries. Remove our own entry by identity instead.
+      const index = this.underConstruction.lastIndexOf(provider);
+      if (index !== -1) {
+        this.underConstruction.splice(index, 1);
+      }
     }
   }
 

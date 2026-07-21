@@ -208,6 +208,73 @@ describe("Container API", () => {
     });
   });
 
+  describe("concurrent async constructions", () => {
+    // https://github.com/needle-di/needle-di/issues/102
+    it("should not report a phantom circular dependency when a failed construction is retried while another is in flight", async () => {
+      const tokenA = new InjectionToken<string>("A");
+      const tokenB = new InjectionToken<string>("B");
+
+      let aAttempts = 0;
+      let releaseB!: () => void;
+      const bGate = new Promise<void>((resolve) => (releaseB = resolve));
+
+      const container = new Container();
+      container.bind({
+        provide: tokenA,
+        async: true,
+        useFactory: async () => {
+          aAttempts += 1;
+          if (aAttempts === 1) {
+            await Promise.resolve(); // yield so B's construction can start before A fails
+            throw new Error("transient failure");
+          }
+          return "a-value";
+        },
+      });
+      container.bind({
+        provide: tokenB,
+        async: true,
+        useFactory: async () => {
+          await bGate; // keep B's construction in flight
+          return "b-value";
+        },
+      });
+
+      // A starts, then B starts; A then fails while B is still under construction.
+      const aFirst = container.getAsync(tokenA).catch((error: Error) => error);
+      const bPending = container.getAsync(tokenB);
+      const aFirstResult = await aFirst;
+      expect(aFirstResult).toBeInstanceOf(Error);
+      expect((aFirstResult as Error).message).toBe("transient failure");
+
+      // Retrying A while B is still in flight must not throw a circular dependency error:
+      // A has no dependencies at all.
+      await expect(container.getAsync(tokenA)).resolves.toBe("a-value");
+
+      releaseB();
+      await expect(bPending).resolves.toBe("b-value");
+    });
+
+    it("should still detect real circular dependencies in async constructions", async () => {
+      const tokenA = new InjectionToken<string>("A");
+      const tokenB = new InjectionToken<string>("B");
+
+      const container = new Container();
+      container.bind({
+        provide: tokenA,
+        async: true,
+        useFactory: async () => `a(${await injectAsync(tokenB)})`,
+      });
+      container.bind({
+        provide: tokenB,
+        async: true,
+        useFactory: async () => `b(${await injectAsync(tokenA)})`,
+      });
+
+      await expect(container.getAsync(tokenA)).rejects.toThrowError(/circular dependency/i);
+    });
+  });
+
   it("should unbind a single service", () => {
     const container = new Container();
 

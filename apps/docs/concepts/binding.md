@@ -70,6 +70,46 @@ const fooService = container.get(FooService);
 
 This is the same as applying a decorator to `FooService`.
 
+### Binding multiple values
+
+In case you want, you can use `Container.bindAll` to bind multiple values to a container.
+If you want to create a list of providers, `defineProviders` remains as the best option if you want to
+preserve type checking.
+
+```ts twoslash
+import { Container, defineProviders } from "@needle-di/core";
+
+const container = new Container();
+
+const providerList = defineProviders(
+  {
+    provide: "Lorem ipsum",
+    useValue: "dolor sit amet"
+  },
+  [
+    {
+      provide: "consectetur",
+      useValue: "adipiscing elit"
+    }
+  ]
+)
+
+container.bindAll(
+  {
+    provide: '123',
+    useValue: '456',
+  },
+  [
+    {
+      provide: 'abc',
+      useValue: 'def',
+    }
+  ],
+  providerList,
+  ...providerList
+);
+```
+
 ## Clear binding
 
 To clear a binding, you can use the `.unbind()` or `.unbindAll()` method. This will also remove any instances of the

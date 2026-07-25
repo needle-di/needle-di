@@ -108,3 +108,24 @@ export function isExistingProvider<T>(provider: Provider<T>): provider is Existi
 export function isMultiProvider<T>(provider: Provider<T>): boolean {
   return "provide" in provider && "multi" in provider && provider.multi === true;
 }
+
+type ExtractProviders<T> = T extends unknown[] ? ExtractProviders<T[number]> : T;
+
+type CheckProviderNode<T> = T extends unknown[]
+  ? CheckProviders<T>
+  : T extends { provide: Token<infer U> }
+    ? Provider<U>
+    : Provider<unknown>;
+export type CheckProviders<T extends unknown[]> = {
+  [K in keyof T]: CheckProviderNode<T[K]>;
+};
+
+/**
+ * Define a list of providers
+ * {@link https://needle-di.io/concepts/binding.html#binding-multiple-values}
+ */
+export function defineProviders<T extends unknown[]>(
+  ...providers: [...T] extends CheckProviders<T> ? T : CheckProviders<T>
+): ExtractProviders<T>[] {
+  return providers.flat(Infinity) as unknown as ExtractProviders<T>[];
+}

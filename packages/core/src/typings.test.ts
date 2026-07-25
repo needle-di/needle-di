@@ -3,32 +3,34 @@
 
 import { describe, it } from "vitest";
 
-import type {
-  AsyncFactoryProvider,
-  ClassProvider,
-  ConstructorProvider,
-  ExistingProvider,
-  FactoryProvider,
-  ValueProvider,
+import {
+  defineProviders,
+  type AsyncFactoryProvider,
+  type ClassProvider,
+  type ConstructorProvider,
+  type ExistingProvider,
+  type FactoryProvider,
+  type Provider,
+  type ValueProvider,
 } from "./providers.ts";
 import { InjectionToken } from "./tokens.ts";
 import { Container } from "./container.ts";
 import { inject, injectAsync } from "./context.ts";
 
 describe("Type-safety", () => {
+  class FooService {
+    private x = Math.random();
+  }
+
+  class FooChildService extends FooService {
+    private y = Math.random();
+  }
+
+  class OtherService {
+    private z = Math.random();
+  }
+
   describe("Providers API", () => {
-    class FooService {
-      private x = Math.random();
-    }
-
-    class FooChildService extends FooService {
-      private y = Math.random();
-    }
-
-    class OtherService {
-      private z = Math.random();
-    }
-
     it("constructor provider", () => {
       const a: ConstructorProvider<FooService> = FooService;
       const b: ConstructorProvider<FooService> = FooChildService;
@@ -158,16 +160,53 @@ describe("Type-safety", () => {
       // @ts-expect-error
       const e: ExistingProvider<FooService> = { provide: 3, useExisting: 3 };
     });
+
+    it("defineProviders", () => {
+      const TOKEN1 = new InjectionToken<string>("token1");
+      const TOKEN2 = new InjectionToken<number>("token2");
+
+      defineProviders(
+        { provide: FooService, useClass: FooChildService },
+        { provide: FooChildService, useClass: FooChildService },
+      );
+
+      // @ts-expect-error
+      defineProviders({ provide: FooChildService, useClass: FooService });
+
+      // @ts-expect-error
+      defineProviders({ provide: TOKEN1, useValue: 42 });
+      // @ts-expect-error
+      defineProviders({ provide: TOKEN2, useValue: "Foo" });
+
+      // 2 params
+      defineProviders({ provide: TOKEN1, useValue: "Foo" }, { provide: TOKEN2, useValue: 42 });
+      defineProviders([
+        { provide: TOKEN1, useValue: "Foo" },
+        { provide: TOKEN2, useValue: 42 },
+      ]);
+      defineProviders(
+        { provide: TOKEN1, useValue: "Foo" },
+        // @ts-expect-error
+        { provide: TOKEN2, useValue: "Foo" },
+      );
+
+      // nesting test
+      defineProviders({ provide: TOKEN1, useValue: "Foo" }, [
+        { provide: TOKEN2, useValue: 42 },
+
+        // @ts-expect-error
+        123,
+
+        [
+          defineProviders([
+            { provide: TOKEN1, useValue: "Foo" },
+            { provide: TOKEN2, useValue: 42 },
+          ]),
+        ],
+      ]);
+    });
   });
   describe("Binding", () => {
-    class FooService {
-      private x = Math.random();
-    }
-
-    class FooChildService extends FooService {
-      private y = Math.random();
-    }
-
     const TOKEN1 = new InjectionToken<string>("token1");
     const TOKEN2 = new InjectionToken<number>("token2");
 
@@ -190,117 +229,29 @@ describe("Type-safety", () => {
 
     it("bindAll()", () => {
       const container = new Container();
-      container.bindAll(
-        { provide: FooService, useClass: FooChildService },
+      container.bindAll({ provide: FooService, useClass: FooChildService }, [
         { provide: FooChildService, useClass: FooChildService },
-      );
+      ]);
+
+      container.bindAll(...[{ provide: FooChildService, useClass: FooChildService }]);
 
       // @ts-expect-error
       container.bindAll({ provide: FooChildService, useClass: FooService });
 
-      // 2 params
-      container.bindAll({ provide: TOKEN1, useValue: "Foo" }, { provide: TOKEN2, useValue: 42 });
-      container.bindAll(
-        { provide: TOKEN1, useValue: "Foo" },
-        // @ts-expect-error
-        { provide: TOKEN2, useValue: "Foo" },
-      );
+      const provderList = defineProviders({ provide: TOKEN1, useValue: "Foo" }, [
+        { provide: TOKEN2, useValue: 42 },
 
-      // 3 params
-      container.bindAll(
-        { provide: TOKEN1, useValue: "Foo" },
-        { provide: TOKEN2, useValue: 42 },
-        { provide: TOKEN1, useValue: "Foo" },
-      );
-      container.bindAll(
-        { provide: TOKEN1, useValue: "Foo" },
-        { provide: TOKEN1, useValue: "Foo" },
-        // @ts-expect-error
-        { provide: TOKEN2, useValue: "Foo" },
-      );
-
-      // 4 params
-      container.bindAll(
-        { provide: TOKEN1, useValue: "Foo" },
-        { provide: TOKEN2, useValue: 42 },
-        { provide: TOKEN1, useValue: "Foo" },
-        { provide: TOKEN2, useValue: 42 },
-      );
-      container.bindAll(
-        { provide: TOKEN1, useValue: "Foo" },
-        { provide: TOKEN1, useValue: "Foo" },
-        // @ts-expect-error
-        { provide: TOKEN2, useValue: "Foo" },
-        { provide: TOKEN2, useValue: 42 },
-      );
-
-      // 5 params
-      container.bindAll(
-        { provide: TOKEN1, useValue: "Foo" },
-        { provide: TOKEN2, useValue: 42 },
-        { provide: TOKEN1, useValue: "Foo" },
-        { provide: TOKEN2, useValue: 42 },
-        { provide: TOKEN1, useValue: "Foo" },
-      );
-      container.bindAll(
-        { provide: TOKEN1, useValue: "Foo" },
-        { provide: TOKEN1, useValue: "Foo" },
-        // @ts-expect-error
-        { provide: TOKEN2, useValue: "Foo" },
-        { provide: TOKEN2, useValue: 42 },
-        { provide: TOKEN1, useValue: "Foo" },
-      );
-
-      // 6 params
-      container.bindAll(
-        { provide: TOKEN1, useValue: "Foo" },
-        { provide: TOKEN2, useValue: 42 },
-        { provide: TOKEN1, useValue: "Foo" },
-        { provide: TOKEN2, useValue: 42 },
-        { provide: TOKEN1, useValue: "Foo" },
-        { provide: TOKEN2, useValue: 42 },
-      );
-      container.bindAll(
-        { provide: TOKEN1, useValue: "Foo" },
-        { provide: TOKEN1, useValue: "Foo" },
-        // @ts-expect-error
-        { provide: TOKEN2, useValue: "Foo" },
-        { provide: TOKEN2, useValue: 42 },
-        { provide: TOKEN1, useValue: "Foo" },
-        { provide: TOKEN2, useValue: 42 },
-      );
-
-      // 10 params
-      container.bindAll(
-        { provide: TOKEN1, useValue: "Foo" },
-        { provide: TOKEN2, useValue: 42 },
-        { provide: TOKEN1, useValue: "Foo" },
-        { provide: TOKEN2, useValue: 42 },
-        { provide: TOKEN1, useValue: "Foo" },
-        { provide: TOKEN2, useValue: 42 },
-        { provide: TOKEN1, useValue: "Foo" },
-        { provide: TOKEN2, useValue: 42 },
-        { provide: TOKEN1, useValue: "Foo" },
-        { provide: TOKEN2, useValue: 42 },
-      );
-      container.bindAll(
-        { provide: TOKEN1, useValue: "Foo" },
-        // @ts-expect-error
-        { provide: TOKEN2, useValue: "Foo" },
-        { provide: TOKEN1, useValue: "Foo" },
-        { provide: TOKEN2, useValue: 42 },
-        { provide: TOKEN1, useValue: "Foo" },
-        { provide: TOKEN2, useValue: 42 },
-        { provide: TOKEN1, useValue: "Foo" },
-        { provide: TOKEN2, useValue: 42 },
-        { provide: TOKEN1, useValue: "Foo" },
-        { provide: TOKEN2, useValue: "Foo" }, // not type-checking (10th params)
-      );
-
-      // @ts-expect-error
-      container.bindAll({ provide: TOKEN1, useValue: 42 });
-      // @ts-expect-error
-      container.bindAll({ provide: TOKEN2, useValue: "Foo" });
+        [
+          [
+            defineProviders([
+              { provide: TOKEN1, useValue: "Foo" },
+              { provide: TOKEN2, useValue: 42 },
+            ]),
+          ],
+        ],
+      ]);
+      container.bindAll(provderList);
+      container.bindAll(...provderList, [defineProviders(provderList)]);
     });
   });
   it("Injection tokens", () => {

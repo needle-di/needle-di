@@ -6,6 +6,7 @@ import { bootstrap, bootstrapAsync, Container } from "./container.ts";
 import { InjectionToken } from "./tokens.ts";
 import { injectable } from "./decorators.ts";
 import { inject, injectAsync } from "./context.ts";
+import { defineProviders } from "./providers.ts";
 
 const myServiceConstructorSpy = vi.fn();
 
@@ -306,6 +307,37 @@ describe("Providers", () => {
         });
       }).toThrowError("already constructed");
     });
+  });
+
+  it("should return a clean list of providers for defineProviders", () => {
+    const MY_TOKEN = Symbol.for("my-token");
+
+    const providers = defineProviders(
+      {
+        provide: MY_TOKEN,
+        useValue: 1,
+      },
+      [
+        {
+          provide: MY_TOKEN,
+          useValue: 2,
+        },
+      ],
+      defineProviders([
+        [
+          [
+            [
+              {
+                provide: MY_TOKEN,
+                useValue: 3,
+              },
+            ],
+          ],
+        ],
+      ]),
+    );
+
+    expect(providers.some((i) => Array.isArray(i))).toBe(false);
   });
 
   it("should throw an error when requesting a single async one", () => {

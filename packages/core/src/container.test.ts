@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { bootstrap, bootstrapAsync, Container } from "./container.ts";
 import { injectable } from "./decorators.ts";
 import { InjectionToken } from "./tokens.ts";
-import { inject, injectAsync } from "./context.ts";
+import { inject, injectAsync, InjectionContext, NeedsInjectionContextError } from "./context.ts";
 
 const myServiceConstructorSpy = vi.fn();
 
@@ -199,12 +199,55 @@ describe("Container API", () => {
 
       // While the construction above is suspended, unrelated code must still be
       // outside any injection context.
-      expect(() => inject("value")).toThrowError(
-        "You can only invoke inject() or injectAsync() within an injection context",
-      );
+      expect(() => inject("value")).toThrowError(NeedsInjectionContextError);
 
       release();
       await expect(pending).resolves.toBe("done");
+    });
+
+    it("should expose an injection context to be used anywhere and obtain services using inject()", async () => {
+      const token = new InjectionToken<string>("suspended");
+      const comparedValue = "woooo";
+
+      const container = new Container();
+      container.bind({
+        provide: token,
+        useValue: comparedValue,
+      });
+
+      const funcTest = () => inject(token);
+
+      const execution = container.get(InjectionContext).run(() => funcTest());
+
+      expect(execution).toBe(comparedValue);
+    });
+
+    it("should not allow execution of asynchronous functions on InjectionContext.run", async () => {
+      const token = new InjectionToken<string>("suspended");
+      const comparedValue = "woooo";
+
+      let release!: () => void;
+      const outsideOfInjection = new Promise<void>((resolve) => (release = resolve));
+      // let reachedAwait!: () => void;
+      // const insideInjection = new Promise<void>((resolve) => (reachedAwait = resolve));
+
+      const container = new Container();
+      container.bind({
+        provide: token,
+        useValue: comparedValue,
+      });
+
+      const funcTest = async () => {
+        expect(inject(token)).toBe(comparedValue);
+        await outsideOfInjection;
+        expect(() => inject(token)).toThrow(NeedsInjectionContextError);
+      };
+
+      const execution = container.get(InjectionContext).run(() => funcTest());
+
+      release();
+
+      await execution;
     });
   });
 

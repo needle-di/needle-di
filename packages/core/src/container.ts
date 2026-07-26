@@ -4,7 +4,7 @@ import type { Provider } from "./providers.ts";
 import { getInjectableTargets, isInjectable } from "./decorators.ts";
 import { assertPresent, assertSingle, getParentClasses, promiseTry, windowedSlice } from "./utils.ts";
 import { Factory } from "./factory.ts";
-import { injectionContext } from "./context.ts";
+import { InjectionContext } from "./context.ts";
 
 /**
  * A dependency injection (DI) container will keep track of all bindings
@@ -16,14 +16,22 @@ export class Container {
 
   private readonly parent?: Container;
   private readonly factory: Factory;
+  private readonly injector: InjectionContext;
 
   constructor(parent?: Container) {
     this.parent = parent;
     this.factory = new Factory(this);
-    this.bind({
-      provide: Container,
-      useValue: this,
-    });
+    this.injector = new InjectionContext(this);
+    this.bindAll(
+      {
+        provide: Container,
+        useValue: this,
+      },
+      {
+        provide: InjectionContext,
+        useValue: this.injector,
+      },
+    );
   }
 
   /**
@@ -238,7 +246,7 @@ export class Container {
     const providers = assertPresent(this.providers.get(token));
 
     if (!this.singletons.has(token)) {
-      injectionContext(this).run(() => {
+      this.injector.run(() => {
         const values = providers.flatMap((provider) => this.factory.construct(provider, token));
         this.singletons.set(token, values);
       });
@@ -323,7 +331,7 @@ export class Container {
       const providers = assertPresent(this.providers.get(token));
 
       if (!this.singletons.has(token)) {
-        await injectionContext(this).runAsync(async () => {
+        await this.injector.run(async () => {
           const values = await Promise.all(providers.map((it) => this.factory.constructAsync(it)));
 
           this.singletons.set(token, values.flat());

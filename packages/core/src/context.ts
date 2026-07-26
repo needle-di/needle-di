@@ -18,7 +18,7 @@ export function inject<T>(
   options?: { optional?: boolean; multi?: boolean; lazy?: boolean },
 ): T | T[] | undefined | (() => T | T[] | undefined) {
   try {
-    return _currentContext.run((container) => container.get(token, options));
+    return _currentContext.boundedContainer.get(token, options);
   } catch (error) {
     if (error instanceof NeedsInjectionContextError && options?.optional === true) {
       return undefined;
@@ -52,9 +52,9 @@ export function injectAsync<T>(
 ): Promise<T | T[] | undefined> | (() => Promise<T | T[] | undefined>) {
   try {
     if (options?.lazy) {
-      return _currentContext.run((container) => container.getAsync(token, { ...options, lazy: true }));
+      return _currentContext.boundedContainer.getAsync(token, { ...options, lazy: true });
     }
-    return _currentContext.runAsync((container) => container.getAsync(token, { ...options, lazy: false }));
+    return promiseTry(() => _currentContext.boundedContainer.getAsync(token, { ...options, lazy: false }));
   } catch (error) {
     if (error instanceof NeedsInjectionContextError && options?.optional === true) {
       return Promise.resolve(undefined);
@@ -70,8 +70,9 @@ export function injectAsync<T>(
  * @internal
  */
 interface Context {
+  readonly boundedContainer: Container;
   run<T>(block: (container: Container) => T): T;
-  runAsync<T>(block: (container: Container) => Promise<T>): Promise<T>;
+  // runAsync<T>(block: (container: Container) => Promise<T>): Promise<T>;
 }
 
 /**
@@ -80,40 +81,27 @@ interface Context {
  * @internal
  */
 class GlobalContext implements Context {
-  run<T>(): T {
+  get boundedContainer(): Container {
     throw new NeedsInjectionContextError();
   }
-
-  runAsync<T>(): Promise<T> {
+  run<T>(): T {
     throw new NeedsInjectionContextError();
   }
 }
 
 /**
- * An injection context allows to perform dependency injection with `inject()` and `injectAsync()`.
- *
- * @internal
+ * Runs a function inside an injection context.
+ * Useful if you have an utility that relies on `inject()` and `injectAsync()`.
  */
-class InjectionContext implements Context {
-  constructor(private readonly container: Container) {}
+export class InjectionContext implements Context {
+  constructor(public readonly boundedContainer: Container) {}
 
   run<T>(block: (container: Container) => T): T {
     const originalContext = _currentContext;
     try {
       // eslint-disable-next-line @typescript-eslint/no-this-alias
       _currentContext = this;
-      return block(this.container);
-    } finally {
-      _currentContext = originalContext;
-    }
-  }
-
-  runAsync<T>(block: (container: Container) => Promise<T> | T): Promise<T> {
-    const originalContext = _currentContext;
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-this-alias
-      _currentContext = this;
-      return promiseTry(() => block(this.container));
+      return block(this.boundedContainer);
     } finally {
       // The context must be restored synchronously, as soon as the block's synchronous
       // prefix has returned its promise. Holding it across the `await` (i.e. until the
@@ -127,20 +115,11 @@ class InjectionContext implements Context {
 let _currentContext: GlobalContext | InjectionContext = new GlobalContext();
 
 /**
- * Creates a new injection context.
- *
- * @internal
- */
-export function injectionContext(container: Container): Context {
-  return new InjectionContext(container);
-}
-
-/**
  * An error that occurs when `inject()` or `injectAsync()` is used outside an injection context.
  *
  * @internal
  */
-class NeedsInjectionContextError extends Error {
+export class NeedsInjectionContextError extends Error {
   constructor() {
     super(`You can only invoke inject() or injectAsync() within an injection context`);
   }

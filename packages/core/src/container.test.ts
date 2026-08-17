@@ -757,5 +757,99 @@ describe("Container API", () => {
       await expect(container.getAsync(token)).resolves.toBe("foo");
       expect(factorySpy).toHaveBeenCalledTimes(2);
     });
+
+    // https://github.com/needle-di/needle-di/issues/117
+    it("should not let an in-flight construction re-populate a token that was unbound", async () => {
+      const token = new InjectionToken<string>("some-token");
+
+      const container = new Container();
+      container.bind({
+        provide: token,
+        async: true,
+        useFactory: async () => {
+          await delay(1);
+          return "foo";
+        },
+      });
+
+      const pending = container.getAsync(token);
+
+      container.unbind(token);
+      expect(container.has(token)).toBe(false);
+
+      // The caller that started the construction still observes its result.
+      await expect(pending).resolves.toBe("foo");
+
+      // The settled construction must not have left an instance behind, so the token
+      // can be bound again.
+      expect(container.has(token)).toBe(false);
+
+      container.bind({ provide: token, async: true, useFactory: async () => "bar" });
+
+      await expect(container.getAsync(token)).resolves.toBe("bar");
+    });
+
+    it("should not let an in-flight construction overwrite the instance of a rebound token", async () => {
+      const token = new InjectionToken<string>("some-token");
+
+      const container = new Container();
+      container.bind({
+        provide: token,
+        async: true,
+        useFactory: async () => {
+          await delay(1);
+          return "foo";
+        },
+      });
+
+      const pending = container.getAsync(token);
+
+      container.unbind(token);
+      container.bind({ provide: token, async: true, useFactory: async () => "bar" });
+
+      await expect(container.getAsync(token)).resolves.toBe("bar");
+      await expect(pending).resolves.toBe("foo");
+
+      expect(container.get(token)).toBe("bar");
+    });
+
+    it("should not let a failed construction of an unbound token discard a newer one", async () => {
+      const token = new InjectionToken<{ name: string }>("some-token");
+
+      let failFirst!: () => void;
+      const firstGate = new Promise<void>((resolve) => (failFirst = resolve));
+
+      const container = new Container();
+      container.bind({
+        provide: token,
+        async: true,
+        useFactory: async () => {
+          await firstGate;
+          throw new Error("transient failure");
+        },
+      });
+
+      const failing = container.getAsync(token).catch((error: Error) => error);
+
+      container.unbind(token);
+
+      const factorySpy = vi.fn(async () => {
+        await delay(1);
+        return { name: "second" };
+      });
+      container.bind({ provide: token, async: true, useFactory: factorySpy });
+
+      // Start the replacement construction, then let the superseded one fail. Its
+      // rejection must not clear the entry that the replacement is tracked under,
+      // as that would let a second construction start alongside it.
+      const second = container.getAsync(token);
+      failFirst();
+      await expect(failing).resolves.toBeInstanceOf(Error);
+
+      const third = container.getAsync(token);
+
+      expect(await second).toBe(await third);
+      expect(factorySpy).toHaveBeenCalledTimes(1);
+    });
   });
 });

@@ -287,16 +287,20 @@ export class Container {
 
       const providers = assertPresent(this.providers.get(token));
 
-      if (!this.singletons.has(token)) {
+      let singletons = this.singletons.get(token);
+
+      if (!singletons) {
         // Cycle detection has to happen before we join an in-flight construction below:
         // a genuine cycle would otherwise await the pending promise of a token that is
         // waiting on us, and hang instead of reporting itself.
         providers.forEach((provider) => assertNoCycle(chain, provider));
 
-        await this.constructOnce(token, providers, chain);
+        // We use the values the construction produced instead of reading `singletons`
+        // back, so that a token that was unbound while we were suspended still resolves
+        // to the result of the construction we started.
+        singletons = await this.constructOnce(token, providers, chain);
       }
 
-      const singletons = assertPresent(this.singletons.get(token));
       const multi = options?.multi ?? false;
 
       if (multi) {
@@ -336,32 +340,41 @@ export class Container {
    * instance. Callers that join an already running construction inherit its result,
    * not its chain: their own chain has already been checked for cycles by the caller.
    */
-  private constructOnce<T>(token: Token<T>, providers: Provider<T>[], chain: ResolutionChain): Promise<void> {
-    let pending = this.pending.get(token);
+  private constructOnce<T>(token: Token<T>, providers: Provider<T>[], chain: ResolutionChain): Promise<T[]> {
+    const existing = this.pending.get(token);
 
-    if (!pending) {
-      pending = promiseTry(async () => {
-        const values = await Promise.all(providers.map((it) => this.factory.constructAsync(it, chain)));
-        return values.flat();
-      });
-
-      this.pending.set(token, pending);
-
-      // Registered before the promise is handed out, so that by the time any caller
-      // resumes, the singleton is already recorded and `pending` is cleaned up.
-      pending.then(
-        (values) => {
-          this.pending.delete(token);
-          this.singletons.set(token, values);
-        },
-        () => {
-          // A failed construction must not be cached, so a later attempt can retry.
-          this.pending.delete(token);
-        },
-      );
+    if (existing) {
+      return existing;
     }
 
-    return pending.then(() => undefined);
+    const pending = promiseTry(async () => {
+      const values = await Promise.all(providers.map((it) => this.factory.constructAsync(it, chain)));
+      return values.flat();
+    });
+
+    this.pending.set(token, pending);
+
+    // A construction may only write back if it is still the current one for this token.
+    // If it was unbound or superseded while in flight, the container has moved on and
+    // storing the result would resurrect a token that is no longer bound.
+    const isCurrent = () => this.pending.get(token) === pending;
+
+    pending.then(
+      (values) => {
+        if (isCurrent()) {
+          this.pending.delete(token);
+          this.singletons.set(token, values);
+        }
+      },
+      () => {
+        // A failed construction must not be cached, so a later attempt can retry.
+        if (isCurrent()) {
+          this.pending.delete(token);
+        }
+      },
+    );
+
+    return pending;
   }
 
   private autoBindIfNeeded<T>(token: Token<T>) {

@@ -152,8 +152,12 @@ container.unbind(MY_CONFIG);
 ```
 
 > [!NOTE]
-> Unbinding a token removes *all* providers for that token, including any
+> Unbinding a token removes _all_ providers for that token, including any
 > [multi-providers](../advanced/multi-injection.md).
+
+If you unbind a token while an [asynchronous construction](../advanced/async-injection.md) for it is still
+in progress, that construction is abandoned: its result is discarded instead of being stored as an instance.
+Any pending `getAsync()` call that started it still resolves with the constructed value.
 
 ---
 

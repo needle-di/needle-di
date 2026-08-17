@@ -31,6 +31,14 @@ const loggerC = child2.get(LOGGER); // `OtherLogger`
 * **Singletons are shared** with child containers (or any descendant) **unless explicitly overridden**.
 * **Singletons are created in the container where they were first bound**, even if they are accessed from a child
   container.
+* **Auto-bound services are created on the root container** by default, so a class annotated with `@injectable()` or a
+  token holding a factory is shared by the whole tree. Use [`Scope.CONTAINER`](/advanced/scopes#scope-container) to give
+  every container its own instance instead.
+* **An explicit binding always wins from auto-binding**, so binding a service on the parent is never shadowed by a child
+  that requests it.
+
+Since a service is resolved by the container that owns it, the container a service lives on is also the container its
+own dependencies are resolved against. That is what [scopes](/advanced/scopes) control.
 
 > [!NOTE]
 > If you bind a multi-provider in a child container, its singletons will not be merged with those from the parent. This

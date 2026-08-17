@@ -523,8 +523,6 @@ describe("Container API", () => {
     });
 
     it("should not report a circular dependency for sibling containers sharing a parent's token", async () => {
-      // NOTE: no token-level factory here, otherwise `autoBindIfNeeded` would bind a
-      // separate provider on each child and the parent would never be consulted.
       const shared = new InjectionToken<string>("SHARED");
       const tokenA = new InjectionToken<string>("A");
       const tokenB = new InjectionToken<string>("B");

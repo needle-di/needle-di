@@ -42,6 +42,9 @@ generating code based on knowledge of other DI libraries such as Angular, NestJS
 - Use `inject(Token)` as a default parameter value in constructors, initializers or factory functions.
 - Use `@injectable()` for [auto-binding](/concepts/binding#auto-binding) services with a zero-argument
   constructor signature.
+- Use `@injectable({ scope: Scope.CONTAINER })` when a service must be re-created per
+  [child container](/advanced/child-containers), for example because it depends on a token that a child
+  overrides. Auto-bound services live on the root container by default, see [scopes](/advanced/scopes).
 - Use `bind()` with a [provider](/concepts/providers) when a service needs explicit configuration.
 - Use [`InjectionToken<T>`](/concepts/tokens#injectiontoken-t) for values that are not classes,
   and pass a `factory` when the token should be [tree-shakeable](/advanced/tree-shaking).

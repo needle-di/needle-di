@@ -108,4 +108,5 @@ const myConfig = container.get(MY_CONFIG);
 This maximizes type-safety since both `container.bind()`, `container.get()` and `inject()` will check and infer the
 types associated with the injection token.
 
-This is not the only benefit: it also enables [tree-shakable injection tokens](/advanced/tree-shaking).
+This is not the only benefit: it also enables [tree-shakable injection tokens](/advanced/tree-shaking), which can
+declare a [scope](/advanced/scopes) to control how widely their value is shared.

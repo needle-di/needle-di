@@ -36,6 +36,18 @@ const fooService = container.get(FooService);
 - It is also a **singleton**: the first time a `FooService` is injected, a new instance is constructed, but it will
   reuse this instance whenever it needs to be injected again.
 
+When using [child containers](../advanced/child-containers), an auto-bound service is created on the root container, so
+a single instance is shared by the whole tree. Pass a [scope](../advanced/scopes) to change that:
+
+```ts twoslash
+import { injectable, Scope } from "@needle-di/core";
+
+@injectable({ scope: Scope.CONTAINER })
+class FooService {
+  // ...
+}
+```
+
 > [!NOTE]
 > Since Needle DI uses native [ECMAScript decorators](https://github.com/tc39/proposal-decorators)
 > (which are currently in [stage 3](https://github.com/tc39/proposals#stage-3)), you will need to transpile your code in

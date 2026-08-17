@@ -66,7 +66,8 @@ container.bind({ // [!code --]
 ```
 
 This effectively enables [auto-binding](/concepts/binding#auto-binding): since the token holds a factory function, the container will automatically
-construct it when you obtain it for the first time.
+construct it when you obtain it for the first time. Like annotated classes, such a token accepts
+a [scope](/advanced/scopes) to control how widely its value is shared across a container tree.
 
 But more importantly, this will make your token **tree-shakeable**: when there are no references to your injection
 token, everything associated with your token will be removed from your bundle.

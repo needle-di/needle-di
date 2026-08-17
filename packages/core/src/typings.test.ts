@@ -16,6 +16,8 @@ import {
 import { InjectionToken } from "./tokens.ts";
 import { Container } from "./container.ts";
 import { inject, injectAsync } from "./context.ts";
+import { injectable } from "./decorators.ts";
+import { Scope } from "./scopes.ts";
 
 describe("Type-safety", () => {
   class FooService {
@@ -555,6 +557,60 @@ describe("Type-safety", () => {
         // @ts-expect-error
         private e = injectAsync(FooChildService, { optional: true, multi: true }) satisfies FooService[] | undefined;
       }
+    });
+  });
+
+  describe("Scopes", () => {
+    it("@injectable()", () => {
+      @injectable()
+      class A {
+        private a = 1;
+      }
+
+      @injectable({ scope: Scope.CONTAINER })
+      class B {
+        private b = 1;
+      }
+
+      @injectable({ scope: "container" })
+      class C {
+        private c = 1;
+      }
+
+      // @ts-expect-error
+      @injectable({ scope: "singleton" })
+      class D {
+        private d = 1;
+      }
+
+      // @ts-expect-error
+      @injectable({ lifetime: Scope.CONTAINER })
+      class E {
+        private e = 1;
+      }
+    });
+
+    it("injection tokens", () => {
+      const a = new InjectionToken("A", { scope: Scope.CONTAINER, factory: () => 3 });
+      const b = new InjectionToken("B", { async: true, scope: Scope.ROOT, factory: async () => 3 });
+
+      // a scope is meaningless without a factory, since nothing is auto-bound
+      // @ts-expect-error
+      const c = new InjectionToken("C", { scope: Scope.CONTAINER });
+      // @ts-expect-error
+      const d = new InjectionToken("D", { scope: "singleton", factory: () => 3 });
+    });
+
+    it("providers", () => {
+      const container = new Container();
+
+      // scopes only apply to auto-binding, never to providers you bind yourself
+      // @ts-expect-error
+      container.bind({ provide: FooService, useClass: FooService, scope: Scope.CONTAINER });
+      // @ts-expect-error
+      container.bindAll({ provide: FooService, useClass: FooService, scope: Scope.CONTAINER });
+      // @ts-expect-error
+      defineProviders({ provide: FooService, useClass: FooService, scope: Scope.CONTAINER });
     });
   });
 });

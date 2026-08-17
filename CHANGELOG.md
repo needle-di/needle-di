@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.2.0](https://github.com/needle-di/needle-di/compare/v1.1.3...v1.2.0) (2026-08-17)
+
+
+### Features
+
+* **inject:** expose injection context and more smartly instantiate the injection context ([#109](https://github.com/needle-di/needle-di/issues/109)) ([87cb3d1](https://github.com/needle-di/needle-di/commit/87cb3d1143755a431c470e684216209e76788b9c))
+* **providers:** introduce defineProviders and fix types for Container.bindAll ([#108](https://github.com/needle-di/needle-di/issues/108)) ([5471f4f](https://github.com/needle-di/needle-di/commit/5471f4fd4fe9709c9a0d8c083903557d568860cf))
+
+
+### Bug Fixes
+
+* **container:** ignore in-flight constructions that were unbound or superseded ([#118](https://github.com/needle-di/needle-di/issues/118)) ([7e26062](https://github.com/needle-di/needle-di/commit/7e26062a51018b763159094b833994e1b7a92a0c)), closes [#117](https://github.com/needle-di/needle-di/issues/117)
+* **container:** let unbind() accept a token instead of a provider ([#116](https://github.com/needle-di/needle-di/issues/116)) ([878dccc](https://github.com/needle-di/needle-di/commit/878dcccd14bb25c2d42728df44811fe42884ac3c)), closes [#111](https://github.com/needle-di/needle-di/issues/111)
+* track in-flight constructions per resolution instead of per container ([#114](https://github.com/needle-di/needle-di/issues/114)) ([eb7c722](https://github.com/needle-di/needle-di/commit/eb7c7223f43a06c92f8f0861454ba318be3f3e77))
+
 ## [1.1.3](https://github.com/needle-di/needle-di/compare/v1.1.2...v1.1.3) (2026-07-21)
 
 

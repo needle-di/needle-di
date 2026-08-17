@@ -116,13 +116,14 @@ export class Container {
   }
 
   /**
-   * Unbinds a provider.
+   * Unbinds a token.
    *
-   * {@link https://needle-di.io/concepts/binding.html#binding}
+   * This removes all providers for that token, including multi-providers,
+   * as well as any instances that were already constructed.
+   *
+   * {@link https://needle-di.io/concepts/binding.html#clear-binding}
    */
-  public unbind<T>(provider: Provider<T>): this {
-    const token = getToken(provider);
-
+  public unbind<T>(token: Token<T>): this {
     this.providers.delete(token);
     this.singletons.delete(token);
     this.pending.delete(token);

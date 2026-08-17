@@ -669,25 +669,93 @@ describe("Container API", () => {
     });
   });
 
-  it("should unbind a single service", () => {
-    const container = new Container();
+  describe("unbind", () => {
+    it("should unbind a single service", () => {
+      const container = new Container();
 
-    container.bind({ provide: MyService, useClass: MyService });
+      container.bind({ provide: MyService, useClass: MyService });
 
-    expect(myServiceConstructorSpy).toHaveBeenCalledTimes(0);
+      expect(myServiceConstructorSpy).toHaveBeenCalledTimes(0);
 
-    const myService1 = container.get(MyService);
-    const myService2 = container.get(MyService);
+      const myService1 = container.get(MyService);
+      const myService2 = container.get(MyService);
 
-    expect(myServiceConstructorSpy).toHaveBeenCalledTimes(1);
-    expect(myService1).toBe(myService2);
+      expect(myServiceConstructorSpy).toHaveBeenCalledTimes(1);
+      expect(myService1).toBe(myService2);
 
-    container.unbind(MyService);
+      container.unbind(MyService);
 
-    const myService3 = container.get(MyService);
+      const myService3 = container.get(MyService);
 
-    expect(myServiceConstructorSpy).toHaveBeenCalledTimes(2);
-    expect(myService3).not.toBe(myService1);
-    expect(myService3).not.toBe(myService2);
+      expect(myServiceConstructorSpy).toHaveBeenCalledTimes(2);
+      expect(myService3).not.toBe(myService1);
+      expect(myService3).not.toBe(myService2);
+    });
+
+    it("should accept an injection token", () => {
+      const token = new InjectionToken<string>("some-token");
+      const container = new Container();
+
+      container.bind({ provide: token, useValue: "foo" });
+
+      expect(container.get(token)).toBe("foo");
+
+      container.unbind(token);
+
+      expect(container.has(token)).toBe(false);
+      expect(() => container.get(token)).toThrowError("No provider(s) found");
+    });
+
+    it("should accept a string or symbol token", () => {
+      const symbolToken = Symbol("some-symbol");
+      const container = new Container();
+
+      container.bind({ provide: "some-string", useValue: "foo" });
+      container.bind({ provide: symbolToken, useValue: "bar" });
+
+      container.unbind("some-string");
+      container.unbind(symbolToken);
+
+      expect(container.has("some-string")).toBe(false);
+      expect(container.has(symbolToken)).toBe(false);
+    });
+
+    it("should unbind all multi-providers for a token", () => {
+      const token = new InjectionToken<string>("some-token");
+      const container = new Container();
+
+      container.bindAll(
+        { provide: token, useValue: "foo", multi: true },
+        { provide: token, useValue: "bar", multi: true },
+      );
+
+      expect(container.get(token, { multi: true })).toEqual(["foo", "bar"]);
+
+      container.unbind(token);
+
+      expect(container.has(token)).toBe(false);
+    });
+
+    it("should unbind an asynchronously constructed service", async () => {
+      const token = new InjectionToken<string>("some-token");
+      const factorySpy = vi.fn(async () => {
+        await delay(1);
+        return "foo";
+      });
+
+      const container = new Container();
+      container.bind({ provide: token, async: true, useFactory: factorySpy });
+
+      await expect(container.getAsync(token)).resolves.toBe("foo");
+
+      container.unbind(token);
+
+      expect(container.has(token)).toBe(false);
+
+      container.bind({ provide: token, async: true, useFactory: factorySpy });
+
+      await expect(container.getAsync(token)).resolves.toBe("foo");
+      expect(factorySpy).toHaveBeenCalledTimes(2);
+    });
   });
 });

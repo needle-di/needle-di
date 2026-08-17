@@ -1,10 +1,19 @@
 import { type Token, isClassToken, toString, isInjectionToken, getToken } from "./tokens.ts";
 import * as Guards from "./providers.ts";
 import type { Provider, ProviderList } from "./providers.ts";
-import { getInjectableTargets, isInjectable } from "./decorators.ts";
-import { assertPresent, assertSingle, flattenDeep, getParentClasses, promiseTry, windowedSlice } from "./utils.ts";
+import { getInjectableTargets, getScope, isInjectable } from "./decorators.ts";
+import {
+  assertPresent,
+  assertSingle,
+  type Class,
+  flattenDeep,
+  getParentClasses,
+  promiseTry,
+  windowedSlice,
+} from "./utils.ts";
 import { assertNoCycle, Factory, type ResolutionChain } from "./factory.ts";
 import { currentResolutionChain, injectionContext } from "./context.ts";
+import { DEFAULT_SCOPE, Scope } from "./scopes.ts";
 
 /**
  * A dependency injection (DI) container will keep track of all bindings
@@ -21,6 +30,12 @@ export class Container {
    * empty `singletons` entry and construct it twice, breaking singleton semantics.
    */
   private readonly pending: PendingMap = new Map();
+
+  /**
+   * Tokens on this container whose providers were registered by auto-binding rather than
+   * by the user. Auto-binding may replace them, an explicit binding it may never touch.
+   */
+  private readonly autoBound = new Set<Token<unknown>>();
 
   private readonly parent?: Container;
   private readonly factory: Factory;
@@ -127,6 +142,7 @@ export class Container {
     this.providers.delete(token);
     this.singletons.delete(token);
     this.pending.delete(token);
+    this.autoBound.delete(token);
 
     return this;
   }
@@ -140,6 +156,7 @@ export class Container {
     this.providers.clear();
     this.singletons.clear();
     this.pending.clear();
+    this.autoBound.clear();
 
     return this;
   }
@@ -406,32 +423,99 @@ export class Container {
 
     if (isClassToken(token) && isInjectable(token)) {
       const targetClasses = getInjectableTargets(token);
+      const scope = this.scopeOf(token, targetClasses);
 
       targetClasses
-        .filter((targetClass) => !this.providers.has(targetClass))
+        .filter((targetClass) => !this.isAlreadyProvided(targetClass, scope))
         .forEach((targetClass) => {
-          this.bind({
+          this.containerFor(scope).autoBind({
             provide: targetClass,
             useClass: targetClass,
             multi: true,
           });
         });
-    } else if (!this.providers.has(token) && isInjectionToken(token) && token.options?.factory) {
-      const async = token.options.async;
-      if (!async) {
-        this.bind({
-          provide: token,
-          async: false,
-          useFactory: token.options.factory,
-        });
-      } else if (async) {
-        this.bind({
-          provide: token,
-          async: true,
-          useFactory: token.options.factory,
-        });
+    } else if (isInjectionToken(token) && token.options?.factory) {
+      const { async, factory, scope = DEFAULT_SCOPE } = token.options;
+
+      if (this.isAlreadyProvided(token, scope)) {
+        return;
       }
+
+      this.containerFor(scope).autoBind(
+        async
+          ? { provide: token, async: true, useFactory: factory }
+          : { provide: token, async: false, useFactory: factory },
+      );
     }
+  }
+
+  /**
+   * The container an auto-binding for this scope belongs on. Since a provider is resolved
+   * by the container that owns it, this is also the container the dependencies of the
+   * auto-bound service are resolved against.
+   */
+  private containerFor(scope: Scope): Container {
+    return scope === Scope.CONTAINER ? this : this.root;
+  }
+
+  private get root(): Container {
+    return this.parent?.root ?? this;
+  }
+
+  /**
+   * The scope shared by all classes that auto-bind under this token.
+   *
+   * A token that resolves to several classes can only be honoured if they agree: their
+   * providers would otherwise end up on different containers, and since multi-providers
+   * are not merged across containers, the ones bound higher up would silently disappear.
+   */
+  private scopeOf<T>(token: Token<T>, targetClasses: Class<unknown>[]): Scope {
+    const scopes = new Set(targetClasses.map(getScope));
+
+    if (scopes.size > 1) {
+      const declarations = targetClasses.map((it) => `${it.name} (${getScope(it)})`).join(", ");
+
+      throw Error(
+        `Cannot auto-bind ${toString(token)}, since the classes it resolves to declare different scopes: ` +
+          `${declarations}. Give them the same scope, or bind them explicitly.`,
+      );
+    }
+
+    return scopes.values().next().value ?? DEFAULT_SCOPE;
+  }
+
+  /**
+   * Whether auto-binding should leave this token alone, either because someone bound it
+   * explicitly, or because the container this scope binds on already provides it.
+   */
+  private isAlreadyProvided<T>(token: Token<T>, scope: Scope): boolean {
+    return this.hasExplicitBinding(token) || this.containerFor(scope).providers.has(token);
+  }
+
+  /**
+   * Whether this container or any of its ancestors has a provider for this token that did
+   * not come from auto-binding. Explicit bindings always win: auto-binding a class on a
+   * child would otherwise shadow the override its parent deliberately registered.
+   */
+  private hasExplicitBinding<T>(token: Token<T>): boolean {
+    if (this.providers.has(token) && !this.autoBound.has(token)) {
+      return true;
+    }
+
+    return this.parent?.hasExplicitBinding(token) ?? false;
+  }
+
+  private autoBind<T>(provider: Provider<T>): void {
+    const token = getToken(provider);
+
+    // Binding a class also registers its parent classes, which are just as auto-bound.
+    // Only the ones without a provider yet, so an explicit binding keeps its status.
+    const parentClasses = isClassToken(token) ? getParentClasses(token).filter((it) => !this.providers.has(it)) : [];
+
+    this.bind(provider);
+
+    this.autoBound.add(token);
+    parentClasses.forEach((it) => this.autoBound.add(it));
   }
 
   private existingProviderAlreadyProvided(token: Token<unknown>, existingToken: Token<unknown>) {

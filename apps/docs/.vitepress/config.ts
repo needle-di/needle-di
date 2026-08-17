@@ -119,6 +119,7 @@ export default defineConfig({
           { text: "Inheritance", link: "/advanced/inheritance" },
           { text: "Tree-shaking", link: "/advanced/tree-shaking" },
           { text: "Child containers", link: "/advanced/child-containers" },
+          { text: "Scopes", link: "/advanced/scopes" },
         ],
       },
       {

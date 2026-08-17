@@ -15,5 +15,6 @@ export type {
   ProviderList,
 } from "./providers.ts";
 export { defineProviders } from "./providers.ts";
+export { Scope } from "./scopes.ts";
 export { InjectionToken } from "./tokens.ts";
 export type { Token } from "./tokens.ts";

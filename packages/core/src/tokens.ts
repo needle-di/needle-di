@@ -2,6 +2,7 @@ import { type AbstractClass, type Class, isClassLike } from "./utils.ts";
 import { type Provider } from "./providers.ts";
 import * as Guards from "./providers.ts";
 import type { Container } from "./container.ts";
+import type { Scope } from "./scopes.ts";
 
 /**
  * A token is a reference to a service in the dependency injection (DI) container.
@@ -27,10 +28,22 @@ export class InjectionToken<T> {
 type InjectionTokenOptions<T> =
   | {
       async: true;
+      /**
+       * How widely the value of this factory is shared. Defaults to `Scope.ROOT`.
+       *
+       * {@link https://needle-di.io/advanced/scopes.html}
+       */
+      scope?: Scope;
       factory: (container: Container) => Promise<T>;
     }
   | {
       async?: false;
+      /**
+       * How widely the value of this factory is shared. Defaults to `Scope.ROOT`.
+       *
+       * {@link https://needle-di.io/advanced/scopes.html}
+       */
+      scope?: Scope;
       factory: (container: Container) => T;
     };
 

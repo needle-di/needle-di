@@ -1,3 +1,7 @@
+---
+description: "Optimize production bundles with tree-shakeable injection tokens, using the factory option of InjectionToken."
+---
+
 # Tree-shaking
 
 Tree-shaking is an optimization technique used in JavaScript bundlers (like [esbuild], [Webpack] or [Rollup]) to remove

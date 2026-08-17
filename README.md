@@ -66,6 +66,15 @@ deno add jsr:@needle-di/core
 
 Check out our docs on [https://needle-di.io](https://needle-di.io/concepts/binding.html).
 
+## Using AI coding agents?
+
+Our documentation is available in an LLM-friendly format:
+
+- [https://needle-di.io/llms.txt](https://needle-di.io/llms.txt) - a compact index of all documentation pages
+- [https://needle-di.io/llms-full.txt](https://needle-di.io/llms-full.txt) - the full documentation as a single file
+
+See [AI agent instructions](https://needle-di.io/ai/agents.html) for guidance on using Needle DI with AI coding agents.
+
 ## License
 
 License under the MIT License (MIT)

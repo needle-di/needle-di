@@ -1,3 +1,7 @@
+---
+description: "Create child containers that inherit providers and singletons from their parent, and override or extend them."
+---
+
 # Child containers
 
 A **child container** is a DI container that inherits all **providers** and **singletons** from its parent (or any

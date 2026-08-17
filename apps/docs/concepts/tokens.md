@@ -1,3 +1,7 @@
+---
+description: "Injection tokens in Needle DI: class constructor references, strings, symbols and typed InjectionToken<T> instances."
+---
+
 # Tokens
 
 An injection token is a reference to a service in the dependency injection (DI) container. This token is used 

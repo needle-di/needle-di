@@ -1,3 +1,6 @@
+---
+description: "Inject dependencies with the inject() and injectAsync() functions, using constructor injection, initializer injection or manual injection."
+---
 
 # Injection
 

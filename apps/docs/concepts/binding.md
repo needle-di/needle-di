@@ -1,3 +1,7 @@
+---
+description: "Register services in a container, using auto-binding with the @injectable() decorator or manual binding with container.bind() and defineProviders()."
+---
+
 # Binding
 
 **Binding** is the registration of your services into your dependency injection (DI) container.

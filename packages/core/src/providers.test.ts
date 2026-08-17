@@ -1,10 +1,11 @@
+import { setTimeout as delay } from "node:timers/promises";
+
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { bootstrap, bootstrapAsync, Container } from "./container.ts";
 import { InjectionToken } from "./tokens.ts";
 import { injectable } from "./decorators.ts";
 import { inject, injectAsync } from "./context.ts";
-import { delay } from "./utils.ts";
 
 const myServiceConstructorSpy = vi.fn();
 

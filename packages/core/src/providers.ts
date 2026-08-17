@@ -1,5 +1,5 @@
 import type { Token } from "./tokens.ts";
-import { type Class, isClassLike } from "./utils.ts";
+import { type Class, flattenDeep, isClassLike } from "./utils.ts";
 import type { Container } from "./container.ts";
 
 /**
@@ -109,23 +109,93 @@ export function isMultiProvider<T>(provider: Provider<T>): boolean {
   return "provide" in provider && "multi" in provider && provider.multi === true;
 }
 
-type ExtractProviders<T> = T extends unknown[] ? ExtractProviders<T[number]> : T;
+/**
+ * A single provider, or an arbitrarily nested array of providers.
+ */
+type ProviderNode = Provider<unknown> | readonly ProviderNode[];
 
-type CheckProviderNode<T> = T extends unknown[]
-  ? CheckProviders<T>
+/**
+ * Recursively unwraps nested arrays, yielding the union of all leaf types.
+ */
+type ExtractProviders<T> = T extends readonly unknown[] ? ExtractProviders<T[number]> : T;
+
+/**
+ * Every provider variant that is an object literal, i.e. all of them except
+ * {@link ConstructorProvider}, which is a class reference.
+ */
+type ObjectProvider<T> =
+  | ClassProvider<T>
+  | ValueProvider<T>
+  | SyncFactoryProvider<T>
+  | AsyncFactoryProvider<T>
+  | ExistingProvider<T>;
+
+/**
+ * `keyof` distributed over the members of a union, rather than the keys they have in common.
+ */
+type KeysOfUnion<T> = T extends unknown ? keyof T : never;
+
+/**
+ * Every property name that may appear on an object-based provider.
+ */
+type ProviderKey = KeysOfUnion<ObjectProvider<unknown>>;
+
+/**
+ * Rejects properties that do not exist on any provider, by requiring them to be `never`.
+ *
+ * TypeScript only applies its built-in excess property check to *fresh* object literals.
+ * Since {@link ProviderList} first captures the arguments in an inferred type parameter,
+ * that freshness is lost, so the check is reproduced here explicitly.
+ */
+type NoExcessProperties<T> = Record<Exclude<keyof T, ProviderKey>, never>;
+
+/**
+ * Type-checks a single element: either a nested array, or a provider whose value type
+ * is correlated with the token it is provided for.
+ */
+type CheckProviderNode<T> = T extends readonly unknown[]
+  ? CheckedProviderList<T>
   : T extends { provide: Token<infer U> }
-    ? Provider<U>
+    ? // only intersect when there is something to reject, to keep error messages readable
+      Exclude<keyof T, ProviderKey> extends never
+      ? Provider<U>
+      : Provider<U> & NoExcessProperties<T>
     : Provider<unknown>;
-export type CheckProviders<T extends unknown[]> = {
+
+/**
+ * Type-checks every element of an (arbitrarily nested) list of providers.
+ */
+type CheckedProviderList<T extends readonly unknown[]> = {
   [K in keyof T]: CheckProviderNode<T[K]>;
 };
 
 /**
- * Define a list of providers
- * {@link https://needle-di.io/concepts/binding.html#binding-multiple-values}
+ * The list of arguments accepted by {@link Container.bindAll} and {@link defineProviders}:
+ * one or more providers, optionally nested in arrays, preserving the correlation between each
+ * token and the value it provides.
+ *
+ * When the given arguments already satisfy this, they are accepted as-is. Otherwise this type
+ * resolves to the expected shape, so that TypeScript reports the mismatch on the offending
+ * element rather than on the call as a whole.
  */
-export function defineProviders<T extends unknown[]>(
-  ...providers: [...T] extends CheckProviders<T> ? T : CheckProviders<T>
-): ExtractProviders<T>[] {
-  return providers.flat(Infinity) as unknown as ExtractProviders<T>[];
+export type ProviderList<T extends readonly unknown[]> = T extends readonly []
+  ? readonly [ProviderNode]
+  : T extends CheckedProviderList<T>
+    ? T
+    : CheckedProviderList<T>;
+
+/**
+ * Defines a list of providers upfront, outside of a container.
+ *
+ * Providers may be passed individually or as (nested) arrays, and are returned as a single
+ * flattened array. Unlike annotating a variable as `Provider<unknown>[]`, this preserves the
+ * correlation between each token and the value it provides.
+ *
+ * @param providers one or more providers, optionally nested in arrays
+ * @returns a flat array containing every given provider
+ *
+ * {@link https://needle-di.io/concepts/binding.html#defining-providers-upfront}
+ */
+export function defineProviders<T extends readonly unknown[]>(...providers: ProviderList<T>): ExtractProviders<T>[] {
+  return flattenDeep(providers as readonly unknown[]);
 }

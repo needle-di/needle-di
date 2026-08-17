@@ -1,8 +1,8 @@
 import { type Token, isClassToken, toString, isInjectionToken, getToken } from "./tokens.ts";
 import * as Guards from "./providers.ts";
-import { defineProviders, type CheckProviders, type Provider } from "./providers.ts";
+import type { Provider, ProviderList } from "./providers.ts";
 import { getInjectableTargets, isInjectable } from "./decorators.ts";
-import { assertPresent, assertSingle, getParentClasses, promiseTry, windowedSlice } from "./utils.ts";
+import { assertPresent, assertSingle, flattenDeep, getParentClasses, promiseTry, windowedSlice } from "./utils.ts";
 import { assertNoCycle, Factory, type ResolutionChain } from "./factory.ts";
 import { currentResolutionChain } from "./context.ts";
 
@@ -37,11 +37,15 @@ export class Container {
   /**
    * Binds multiple providers to this container.
    *
-   * {@link https://needle-di.io/concepts/binding.html#binding}
+   * Providers may be passed individually or as (nested) arrays. To define a list of providers
+   * upfront, outside of a container, use `defineProviders()`.
+   *
+   * @param providers one or more providers, optionally nested in arrays
+   *
+   * {@link https://needle-di.io/concepts/binding.html#binding-multiple-providers}
    */
-  public bindAll<T extends unknown[]>(...providers: T extends CheckProviders<T> ? T : CheckProviders<T>): this {
-    const flatProviders = defineProviders(providers as Provider<unknown>[]);
-    flatProviders.forEach((it) => this.bind(it));
+  public bindAll<T extends readonly unknown[]>(...providers: ProviderList<T>): this {
+    flattenDeep<Provider<unknown>>(providers as readonly unknown[]).forEach((it) => this.bind(it));
     return this;
   }
 

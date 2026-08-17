@@ -173,6 +173,11 @@ export function currentResolutionChain(): ResolutionChain {
  */
 class NeedsInjectionContextError extends Error {
   constructor() {
-    super(`You can only invoke inject() or injectAsync() within an injection context`);
+    super(
+      `You can only invoke inject() or injectAsync() within an injection context. ` +
+        `If you entered one using container.runInInjectionContext(), note that it is no longer ` +
+        `active after its first await. ` +
+        `See https://needle-di.io/concepts/injection.html#running-in-an-injection-context`,
+    );
   }
 }

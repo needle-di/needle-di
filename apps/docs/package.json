@@ -10,8 +10,8 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "vitepress": "2.0.0-alpha.3",
-    "@needle-di/core": "*"
+    "@needle-di/core": "*",
+    "vitepress": "2.0.0-alpha.3"
   },
   "devDependencies": {
     "@shikijs/vitepress-twoslash": "^3.3.0",
@@ -22,6 +22,7 @@
     "prettier": "^3.3.3",
     "typescript": "~5.7.0",
     "typescript-eslint": "^8.11.0",
+    "vitepress-plugin-llms": "^1.13.5",
     "vue": "^3.5.13"
   }
 }

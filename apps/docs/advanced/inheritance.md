@@ -1,3 +1,6 @@
+---
+description: "Bind and inject services through abstract classes and inheritance, and how to work with interfaces."
+---
 
 # Inheritance support
 

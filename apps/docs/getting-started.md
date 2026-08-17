@@ -1,4 +1,5 @@
 ---
+description: "Install @needle-di/core from npm or JSR, configure your transpiler for native ECMAScript decorators, and bootstrap your first container."
 outline: deep
 ---
 

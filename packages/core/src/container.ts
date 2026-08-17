@@ -4,7 +4,7 @@ import type { Provider } from "./providers.ts";
 import { getInjectableTargets, isInjectable } from "./decorators.ts";
 import { assertPresent, assertSingle, getParentClasses, promiseTry, windowedSlice } from "./utils.ts";
 import { assertNoCycle, Factory, type ResolutionChain } from "./factory.ts";
-import { currentResolutionChain } from "./context.ts";
+import { currentResolutionChain, injectionContext } from "./context.ts";
 
 /**
  * A dependency injection (DI) container will keep track of all bindings
@@ -371,6 +371,28 @@ export class Container {
         );
       }
     });
+  }
+
+  /**
+   * Runs a function within an injection context backed by this container, so that it
+   * can use `inject()` and `injectAsync()` instead of `container.get()`. The return
+   * value of the function is passed through.
+   *
+   * The injection context is only active for as long as the function runs
+   * synchronously. When passing an async function, `inject()` and `injectAsync()`
+   * must therefore be called before its first `await`.
+   *
+   * {@link https://needle-di.io/concepts/injection.html#running-in-an-injection-context}
+   */
+  public runInInjectionContext<T>(block: (container: Container) => T): T {
+    // A fresh context per call, never one cached per container: contexts are scoped to
+    // a single resolution, and sharing one would interleave concurrent resolutions.
+    //
+    // The chain is inherited rather than reset. Called from user code it is empty
+    // anyway, but called from within a construction the block is part of that
+    // resolution, so continuing its chain is what keeps circular dependencies
+    // detectable instead of recursing until the stack overflows.
+    return injectionContext(this, currentResolutionChain()).run(block);
   }
 
   /**

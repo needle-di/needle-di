@@ -72,7 +72,8 @@ Note that the `inject()` and `injectAsync()` functions are only available in the
 - During construction of a class being instantiated by the DI container;
 - In the initializer for fields of such classes;
 - In a synchronous factory function specified for `useFactory` of a provider;
-- In the `factory` function specified for an `InjectionToken`.
+- In the `factory` function specified for an `InjectionToken`;
+- In a function you run yourself using [`container.runInInjectionContext()`](#running-in-an-injection-context).
 
 If you try to use this function outside this context, it will throw
 an error. This is because Needle DI needs a reference to a DI container when
@@ -115,18 +116,85 @@ In these cases, manually passing the singleton container instance as an argument
 to the function and using the `.get()` function within provides the same practical
 functionality as using classes with decorators, just with reduced ergonomics.
 
-```ts
+```ts twoslash
 import type { Container } from "@needle-di/core";
 
 import { FooService } from "./foo.service";
 import { BarService } from "./bar.service";
 
 const createMyService = (container: Container) => {
-  fooService = container.get(FooService);
-  barService = container.get(BarService);
+  const fooService = container.get(FooService);
+  const barService = container.get(BarService);
 
   // ...
 }
 ```
+
+Since the dependencies are explicit and no hidden state is involved, this is still the
+most predictable option, and it keeps working across `await` boundaries.
+
+## Running in an injection context
+
+If threading the container through every function gets in the way, you can also enter an
+injection context yourself, using the `.runInInjectionContext()` method. Everything that
+runs inside can then use `inject()` and `injectAsync()`, no matter how deeply nested, and
+the return value of your function is passed through:
+
+```ts twoslash
+import { Container, inject } from "@needle-di/core";
+
+import { FooService } from "./foo.service";
+import { BarService } from "./bar.service";
+
+const container = new Container();
+
+const createMyService = () => ({
+  fooService: inject(FooService),
+  barService: inject(BarService),
+});
+
+const myService = container.runInInjectionContext(createMyService);
+//     ^?
+```
+
+Your function also receives the container as its first argument, so you can still fall
+back to `.get()` where that reads better.
+
+Services are resolved from the container you started the context on, so a
+[child container](../advanced/child-containers) will resolve its own overrides first and
+only fall back to its parent afterwards.
+
+::: warning
+The injection context is only active while your function runs **synchronously**.
+
+As soon as it awaits something, the context is restored and `inject()` will throw again.
+This is deliberate: keeping the context active across an `await` would leak it to
+unrelated code that happens to run while your function is suspended, which would then
+resolve from the wrong container.
+
+So when passing an async function, make sure that every `inject()` and `injectAsync()`
+call happens **before its first `await`**:
+
+```ts twoslash
+import { Container, inject, injectAsync } from "@needle-di/core";
+
+import { FooService } from "./foo.service";
+import { BarService } from "./bar.service";
+
+const container = new Container();
+
+await container.runInInjectionContext(async () => {
+  const fooService = inject(FooService); // ✅ still synchronous
+  const barService = injectAsync(BarService); // ✅ started synchronously
+
+  await barService;
+
+  inject(FooService); // ❌ throws: no longer in an injection context
+});
+```
+
+If you need dependencies after an `await`, either inject them up front, or use
+[manual injection](#manual-injection) instead.
+:::
 
 [parameter decorators]: https://github.com/tc39/proposal-class-method-parameter-decorators

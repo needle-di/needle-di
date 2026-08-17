@@ -80,6 +80,24 @@ Similarly, there is a `bootstrapAsync()` method when using [async providers](../
 > of new instances for your singleton services. Make sure to only call it once in the lifecycle of your
 > application to use it efficiently.
 
+## Running functions in an injection context
+
+Besides `.get()`, you can also hand a function to the container using `.runInInjectionContext()`,
+so that it can use `inject()` and `injectAsync()` instead of a container reference:
+
+```ts twoslash
+import { Container, inject } from "@needle-di/core";
+import { FooService } from "./foo.service";
+
+const container = new Container();
+
+const fooService = container.runInInjectionContext(() => inject(FooService));
+//     ^?
+```
+
+See [running in an injection context](./injection#running-in-an-injection-context) for more information,
+including its limitations around `async` functions.
+
 ## Creating child containers
 
 You can also create a child container, which can be used to override a provider without affecting its parent.

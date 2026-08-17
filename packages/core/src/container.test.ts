@@ -143,6 +143,18 @@ describe("Container API", () => {
       expect(container.get("e")).toEqual("eValue");
     });
 
+    it("should accept a spread array and a readonly array on bindAll", () => {
+      const providers = [
+        { provide: "f", useValue: "fValue" },
+        { provide: "g", useValue: "gValue" },
+      ] as const;
+
+      const container = new Container().bindAll(...providers).bindAll(providers);
+
+      expect(container.get("f")).toEqual("fValue");
+      expect(container.get("g")).toEqual("gValue");
+    });
+
     // https://github.com/needle-di/needle-di/issues/103
     it("should not leak the injection context of a suspended async construction", async () => {
       const tokenA = new InjectionToken<string>("A");

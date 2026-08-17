@@ -204,6 +204,20 @@ describe("Type-safety", () => {
           ]),
         ],
       ]);
+
+      // at least one provider is required
+      // @ts-expect-error
+      defineProviders();
+
+      // properties that do not exist on any provider are rejected
+      // @ts-expect-error
+      defineProviders({ provide: TOKEN1, useValue: "Foo", scope: "singleton" });
+
+      // readonly provider lists are accepted
+      defineProviders([
+        { provide: TOKEN1, useValue: "Foo" },
+        { provide: TOKEN2, useValue: 42 },
+      ] as const);
     });
   });
   describe("Binding", () => {
@@ -238,7 +252,91 @@ describe("Type-safety", () => {
       // @ts-expect-error
       container.bindAll({ provide: FooChildService, useClass: FooService });
 
-      const provderList = defineProviders({ provide: TOKEN1, useValue: "Foo" }, [
+      // at least one provider is required
+      // @ts-expect-error
+      container.bindAll();
+
+      // 2 params
+      container.bindAll({ provide: TOKEN1, useValue: "Foo" }, { provide: TOKEN2, useValue: 42 });
+      container.bindAll(
+        { provide: TOKEN1, useValue: "Foo" },
+        // @ts-expect-error
+        { provide: TOKEN2, useValue: "Foo" },
+      );
+
+      // 3 params
+      container.bindAll(
+        { provide: TOKEN1, useValue: "Foo" },
+        { provide: TOKEN2, useValue: 42 },
+        { provide: TOKEN1, useValue: "Foo" },
+      );
+      container.bindAll(
+        { provide: TOKEN1, useValue: "Foo" },
+        { provide: TOKEN1, useValue: "Foo" },
+        // @ts-expect-error
+        { provide: TOKEN2, useValue: "Foo" },
+      );
+
+      // 6 params
+      container.bindAll(
+        { provide: TOKEN1, useValue: "Foo" },
+        { provide: TOKEN2, useValue: 42 },
+        { provide: TOKEN1, useValue: "Foo" },
+        { provide: TOKEN2, useValue: 42 },
+        { provide: TOKEN1, useValue: "Foo" },
+        { provide: TOKEN2, useValue: 42 },
+      );
+      container.bindAll(
+        { provide: TOKEN1, useValue: "Foo" },
+        { provide: TOKEN1, useValue: "Foo" },
+        // @ts-expect-error
+        { provide: TOKEN2, useValue: "Foo" },
+        { provide: TOKEN2, useValue: 42 },
+        { provide: TOKEN1, useValue: "Foo" },
+        { provide: TOKEN2, useValue: 42 },
+      );
+
+      // 10 params: used to be beyond the last overload, and therefore unchecked
+      container.bindAll(
+        { provide: TOKEN1, useValue: "Foo" },
+        { provide: TOKEN2, useValue: 42 },
+        { provide: TOKEN1, useValue: "Foo" },
+        { provide: TOKEN2, useValue: 42 },
+        { provide: TOKEN1, useValue: "Foo" },
+        { provide: TOKEN2, useValue: 42 },
+        { provide: TOKEN1, useValue: "Foo" },
+        { provide: TOKEN2, useValue: 42 },
+        { provide: TOKEN1, useValue: "Foo" },
+        { provide: TOKEN2, useValue: 42 },
+      );
+      container.bindAll(
+        { provide: TOKEN1, useValue: "Foo" },
+        { provide: TOKEN2, useValue: 42 },
+        { provide: TOKEN1, useValue: "Foo" },
+        { provide: TOKEN2, useValue: 42 },
+        { provide: TOKEN1, useValue: "Foo" },
+        { provide: TOKEN2, useValue: 42 },
+        { provide: TOKEN1, useValue: "Foo" },
+        { provide: TOKEN2, useValue: 42 },
+        { provide: TOKEN1, useValue: "Foo" },
+        // @ts-expect-error
+        { provide: TOKEN2, useValue: "Foo" },
+      );
+
+      // @ts-expect-error
+      container.bindAll({ provide: TOKEN1, useValue: 42 });
+      // @ts-expect-error
+      container.bindAll({ provide: TOKEN2, useValue: "Foo" });
+
+      // properties that do not exist on any provider are rejected
+      // @ts-expect-error
+      container.bindAll({ provide: TOKEN1, useValue: "Foo", scope: "singleton" });
+      container.bindAll([
+        // @ts-expect-error
+        { provide: TOKEN1, useValue: "Foo", scope: "singleton" },
+      ]);
+
+      const providerList = defineProviders({ provide: TOKEN1, useValue: "Foo" }, [
         { provide: TOKEN2, useValue: 42 },
 
         [
@@ -250,8 +348,26 @@ describe("Type-safety", () => {
           ],
         ],
       ]);
-      container.bindAll(provderList);
-      container.bindAll(...provderList, [defineProviders(provderList)]);
+      container.bindAll(providerList);
+      container.bindAll(...providerList, [defineProviders(providerList)]);
+    });
+
+    it("bindAll() with readonly providers", () => {
+      const container = new Container();
+
+      const providers = [
+        { provide: TOKEN1, useValue: "Foo" },
+        { provide: TOKEN2, useValue: 42 },
+      ] as const;
+
+      container.bindAll(providers);
+      container.bindAll(...providers);
+      container.bindAll(defineProviders(providers));
+
+      const readonlyProviders: readonly Provider<string>[] = [];
+
+      container.bindAll(readonlyProviders);
+      container.bindAll(...readonlyProviders);
     });
   });
   it("Injection tokens", () => {

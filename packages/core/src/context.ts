@@ -1,4 +1,5 @@
 import { Container } from "./container.ts";
+import type { ResolutionChain } from "./factory.ts";
 import type { Token } from "./tokens.ts";
 import { promiseTry } from "./utils.ts";
 
@@ -65,11 +66,22 @@ export function injectAsync<T>(
 }
 
 /**
+ * The chain of a resolution that has no parent, i.e., one started from user code.
+ */
+const EMPTY_RESOLUTION_CHAIN: ResolutionChain = Object.freeze([]);
+
+/**
  * A context has a specific container associated to it and allows you to run sync or async code.
+ *
+ * It also carries the {@link ResolutionChain} of the resolution it belongs to, so that
+ * `inject()` and `injectAsync()` calls made by user code continue that chain instead of
+ * starting a new one.
  *
  * @internal
  */
-interface Context {
+export interface Context {
+  readonly chain: ResolutionChain;
+
   run<T>(block: (container: Container) => T): T;
   runAsync<T>(block: (container: Container) => Promise<T>): Promise<T>;
 }
@@ -80,6 +92,8 @@ interface Context {
  * @internal
  */
 class GlobalContext implements Context {
+  readonly chain: ResolutionChain = EMPTY_RESOLUTION_CHAIN;
+
   run<T>(): T {
     throw new NeedsInjectionContextError();
   }
@@ -95,7 +109,10 @@ class GlobalContext implements Context {
  * @internal
  */
 class InjectionContext implements Context {
-  constructor(private readonly container: Container) {}
+  constructor(
+    private readonly container: Container,
+    public readonly chain: ResolutionChain,
+  ) {}
 
   run<T>(block: (container: Container) => T): T {
     const originalContext = _currentContext;
@@ -131,8 +148,22 @@ let _currentContext: GlobalContext | InjectionContext = new GlobalContext();
  *
  * @internal
  */
-export function injectionContext(container: Container): Context {
-  return new InjectionContext(container);
+export function injectionContext(container: Container, chain: ResolutionChain = EMPTY_RESOLUTION_CHAIN): Context {
+  return new InjectionContext(container, chain);
+}
+
+/**
+ * Returns the resolution chain of the injection context that is currently active, or an
+ * empty chain when there is none (i.e., when a resolution is started from user code).
+ *
+ * Like `inject()` and `injectAsync()`, this must be read synchronously while the context
+ * is still active: the context is restored as soon as the current synchronous block
+ * returns, so it cannot be read after an `await`.
+ *
+ * @internal
+ */
+export function currentResolutionChain(): ResolutionChain {
+  return _currentContext.chain;
 }
 
 /**

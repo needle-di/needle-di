@@ -3,8 +3,8 @@ import * as Guards from "./providers.ts";
 import type { Provider } from "./providers.ts";
 import { getInjectableTargets, isInjectable } from "./decorators.ts";
 import { assertPresent, assertSingle, getParentClasses, promiseTry, windowedSlice } from "./utils.ts";
-import { Factory } from "./factory.ts";
-import { injectionContext } from "./context.ts";
+import { assertNoCycle, Factory, type ResolutionChain } from "./factory.ts";
+import { currentResolutionChain } from "./context.ts";
 
 /**
  * A dependency injection (DI) container will keep track of all bindings
@@ -13,6 +13,14 @@ import { injectionContext } from "./context.ts";
 export class Container {
   private readonly providers: ProviderMap = new Map();
   private readonly singletons: SingletonMap = new Map();
+
+  /**
+   * Async constructions that have been started but have not settled yet, keyed by token.
+   *
+   * Without this, two overlapping `getAsync()` calls for the same token would both see an
+   * empty `singletons` entry and construct it twice, breaking singleton semantics.
+   */
+  private readonly pending: PendingMap = new Map();
 
   private readonly parent?: Container;
   private readonly factory: Factory;
@@ -177,6 +185,7 @@ export class Container {
 
     this.providers.delete(token);
     this.singletons.delete(token);
+    this.pending.delete(token);
 
     return this;
   }
@@ -189,6 +198,7 @@ export class Container {
   public unbindAll(): this {
     this.providers.clear();
     this.singletons.clear();
+    this.pending.clear();
 
     return this;
   }
@@ -218,8 +228,14 @@ export class Container {
     const lazy = options?.lazy ?? false;
 
     if (lazy) {
+      // Lazy injection deliberately starts a new resolution when the getter is invoked,
+      // which is exactly what makes it usable to break a cycle.
       return () => this.get(token, { ...options, lazy: false });
     }
+
+    // The resolution we are part of, if any. Read from the active injection context
+    // rather than passed as an argument, so that the public API stays unchanged.
+    const chain = currentResolutionChain();
 
     this.autoBindIfNeeded(token);
 
@@ -227,6 +243,8 @@ export class Container {
 
     if (!this.providers.has(token)) {
       if (this.parent) {
+        // Delegation happens synchronously, so the context this chain was read from is
+        // still active and the parent observes the very same chain.
         return this.parent.get(token, { ...options, lazy: false });
       }
       if (optional) {
@@ -238,10 +256,8 @@ export class Container {
     const providers = assertPresent(this.providers.get(token));
 
     if (!this.singletons.has(token)) {
-      injectionContext(this).run(() => {
-        const values = providers.flatMap((provider) => this.factory.construct(provider, token));
-        this.singletons.set(token, values);
-      });
+      const values = providers.flatMap((provider) => this.factory.construct(provider, token, chain));
+      this.singletons.set(token, values);
     }
 
     const singletons = assertPresent(this.singletons.get(token));
@@ -302,8 +318,14 @@ export class Container {
     const lazy = options?.lazy ?? false;
 
     if (lazy) {
+      // Lazy injection deliberately starts a new resolution when the getter is invoked,
+      // which is exactly what makes it usable to break a cycle.
       return () => this.getAsync(token, { ...options, lazy: false });
     }
+
+    // Must be read here, before the first `await`: the injection context we inherit this
+    // from is restored as soon as our caller's synchronous block returns.
+    const chain = currentResolutionChain();
 
     return promiseTry(async () => {
       this.autoBindIfNeeded(token);
@@ -312,6 +334,8 @@ export class Container {
 
       if (!this.providers.has(token)) {
         if (this.parent) {
+          // Still part of the synchronous prefix, so the context is active and the parent
+          // observes the very same chain.
           return this.parent.getAsync(token, { ...options, lazy: false });
         }
         if (optional) {
@@ -323,11 +347,12 @@ export class Container {
       const providers = assertPresent(this.providers.get(token));
 
       if (!this.singletons.has(token)) {
-        await injectionContext(this).runAsync(async () => {
-          const values = await Promise.all(providers.map((it) => this.factory.constructAsync(it)));
+        // Cycle detection has to happen before we join an in-flight construction below:
+        // a genuine cycle would otherwise await the pending promise of a token that is
+        // waiting on us, and hang instead of reporting itself.
+        providers.forEach((provider) => assertNoCycle(chain, provider));
 
-          this.singletons.set(token, values.flat());
-        });
+        await this.constructOnce(token, providers, chain);
       }
 
       const singletons = assertPresent(this.singletons.get(token));
@@ -362,6 +387,40 @@ export class Container {
    */
   public has<T>(token: Token<T>): boolean {
     return this.providers.has(token) || (this.parent?.has(token) ?? false);
+  }
+
+  /**
+   * Constructs the providers for a token asynchronously, ensuring that concurrent
+   * requests for the same token share a single construction and therefore a single
+   * instance. Callers that join an already running construction inherit its result,
+   * not its chain: their own chain has already been checked for cycles by the caller.
+   */
+  private constructOnce<T>(token: Token<T>, providers: Provider<T>[], chain: ResolutionChain): Promise<void> {
+    let pending = this.pending.get(token);
+
+    if (!pending) {
+      pending = promiseTry(async () => {
+        const values = await Promise.all(providers.map((it) => this.factory.constructAsync(it, chain)));
+        return values.flat();
+      });
+
+      this.pending.set(token, pending);
+
+      // Registered before the promise is handed out, so that by the time any caller
+      // resumes, the singleton is already recorded and `pending` is cleaned up.
+      pending.then(
+        (values) => {
+          this.pending.delete(token);
+          this.singletons.set(token, values);
+        },
+        () => {
+          // A failed construction must not be cached, so a later attempt can retry.
+          this.pending.delete(token);
+        },
+      );
+    }
+
+    return pending.then(() => undefined);
   }
 
   private autoBindIfNeeded<T>(token: Token<T>) {
@@ -416,6 +475,12 @@ interface SingletonMap extends Map<Token<unknown>, unknown[]> {
   get<T>(token: Token<T>): T[] | undefined;
 
   set<T>(token: Token<T>, value: T[]): this;
+}
+
+interface PendingMap extends Map<Token<unknown>, Promise<unknown[]>> {
+  get<T>(token: Token<T>): Promise<T[]> | undefined;
+
+  set<T>(token: Token<T>, value: Promise<T[]>): this;
 }
 
 /**

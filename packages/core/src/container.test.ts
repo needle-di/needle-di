@@ -233,6 +233,140 @@ describe("Container API", () => {
       release();
       await expect(pending).resolves.toBe("done");
     });
+
+    // https://needle-di.io/advanced/optional-injection.html#outside-the-injection-context
+    it("should resolve optional injections outside an injection context to undefined", async () => {
+      expect(inject("value", { optional: true })).toBeUndefined();
+      await expect(injectAsync("value", { optional: true })).resolves.toBeUndefined();
+    });
+  });
+
+  describe("runInInjectionContext", () => {
+    it("should allow inject() inside the block and pass through its return value", () => {
+      const token = new InjectionToken<string>("token");
+      const container = new Container().bind({ provide: token, useValue: "some-value" });
+
+      const readToken = () => inject(token);
+
+      expect(container.runInInjectionContext(readToken)).toBe("some-value");
+    });
+
+    it("should pass the container to the block", () => {
+      const token = new InjectionToken<string>("token");
+      const container = new Container().bind({ provide: token, useValue: "some-value" });
+
+      expect(container.runInInjectionContext((it) => it.get(token))).toBe("some-value");
+    });
+
+    it("should resolve from the container it was started on", () => {
+      const token = new InjectionToken<string>("token");
+      const parentOnly = new InjectionToken<string>("parent-only");
+
+      const parent = new Container()
+        .bind({ provide: token, useValue: "from-parent" })
+        .bind({ provide: parentOnly, useValue: "only-in-parent" });
+      const child = parent.createChild().bind({ provide: token, useValue: "from-child" });
+
+      expect(child.runInInjectionContext(() => inject(token))).toBe("from-child");
+      expect(parent.runInInjectionContext(() => inject(token))).toBe("from-parent");
+
+      // ...and still falls back to the parent for what the child does not provide
+      expect(child.runInInjectionContext(() => inject(parentOnly))).toBe("only-in-parent");
+      expect(() => parent.runInInjectionContext(() => inject("child-only"))).toThrowError(
+        "No provider(s) found for child-only",
+      );
+    });
+
+    it("should support injectAsync() as long as it is called before the first await", async () => {
+      const token = new InjectionToken<string>("token");
+      const container = new Container().bind({
+        provide: token,
+        async: true,
+        useFactory: () => Promise.resolve("some-value"),
+      });
+
+      const pending = container.runInInjectionContext(() => injectAsync(token));
+
+      await expect(pending).resolves.toBe("some-value");
+    });
+
+    it("should restore the previous context afterwards", () => {
+      const container = new Container().bind({ provide: "value", useValue: "some-value" });
+
+      expect(container.runInInjectionContext(() => inject("value"))).toBe("some-value");
+
+      expect(() => inject("value")).toThrowError(
+        "You can only invoke inject() or injectAsync() within an injection context",
+      );
+    });
+
+    it("should restore the previous context when the block throws", () => {
+      const container = new Container().bind({ provide: "value", useValue: "some-value" });
+
+      expect(() =>
+        container.runInInjectionContext(() => {
+          throw new Error("boom");
+        }),
+      ).toThrowError("boom");
+
+      expect(() => inject("value")).toThrowError(
+        "You can only invoke inject() or injectAsync() within an injection context",
+      );
+    });
+
+    it("should restore the surrounding injection context when nested in a construction", () => {
+      const outer = new Container().bind({ provide: "value", useValue: "from-outer" });
+      const inner = new Container().bind({ provide: "value", useValue: "from-inner" });
+
+      outer.bind({
+        provide: "token",
+        useFactory: () => [inject("value"), inner.runInInjectionContext(() => inject("value")), inject("value")],
+      });
+
+      expect(outer.get("token")).toEqual(["from-outer", "from-inner", "from-outer"]);
+    });
+
+    it("should not keep the context active after the first await of an async block", async () => {
+      const token = new InjectionToken<string>("token");
+      const container = new Container().bind({ provide: token, useValue: "some-value" });
+
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => (release = resolve));
+
+      const pending = container.runInInjectionContext(async () => {
+        // still inside the synchronous prefix, so this is fine...
+        const before = inject(token);
+        await gate;
+        // ...but from here on the context has been restored
+        expect(() => inject(token)).toThrowError(
+          "You can only invoke inject() or injectAsync() within an injection context",
+        );
+        return before;
+      });
+
+      release();
+
+      await expect(pending).resolves.toBe("some-value");
+    });
+
+    it("should still detect circular dependencies when invoked during a construction", () => {
+      const container = new Container();
+      container.bind({
+        provide: "a",
+        useFactory: (it) => it.runInInjectionContext(() => inject("a")),
+      });
+
+      expect(() => container.get("a")).toThrowError("Detected circular dependency: a -> a");
+    });
+
+    it("should not report a circular dependency for resolutions started from user code", () => {
+      const container = new Container()
+        .bind({ provide: "shared", useFactory: () => "shared-value" })
+        .bind({ provide: "a", useFactory: () => inject("shared") });
+
+      expect(container.runInInjectionContext(() => inject("a"))).toBe("shared-value");
+      expect(container.runInInjectionContext(() => inject("shared"))).toBe("shared-value");
+    });
   });
 
   describe("concurrent async constructions", () => {

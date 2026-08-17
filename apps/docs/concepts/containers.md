@@ -1,3 +1,7 @@
+---
+description: "Create a Container, bind services to it, bootstrap your application with container.get() and create child containers."
+---
+
 # Containers
 
 ## Creating a container

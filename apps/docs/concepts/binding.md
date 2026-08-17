@@ -1,6 +1,10 @@
+---
+description: "Register services in a container, using auto-binding with the @injectable() decorator or manual binding with container.bind() and defineProviders()."
+---
+
 # Binding
 
-**Binding** is the registration of your services into your dependency injection (DI)  container.
+**Binding** is the registration of your services into your dependency injection (DI) container.
 
 ## Auto-binding
 
@@ -28,8 +32,8 @@ const fooService = container.get(FooService);
 //     ^?
 ```
 
-* Its construction is **lazy**: it will only be created when you request it from the container.
-* It is also a **singleton**: the first time a `FooService` is injected, a new instance is constructed, but it will
+- Its construction is **lazy**: it will only be created when you request it from the container.
+- It is also a **singleton**: the first time a `FooService` is injected, a new instance is constructed, but it will
   reuse this instance whenever it needs to be injected again.
 
 > [!NOTE]
@@ -43,11 +47,8 @@ const fooService = container.get(FooService);
 > decorators.
 
 [TypeScript]: https://devblogs.microsoft.com/typescript/announcing-typescript-5-0/#decorators
-
 [esbuild]: https://github.com/evanw/esbuild/releases/v0.21.0
-
 [Webpack]: https://stackoverflow.com/a/37616418/1116452
-
 [Babel]: https://stackoverflow.com/a/37616418/1116452
 
 ## Manual binding
@@ -70,12 +71,99 @@ const fooService = container.get(FooService);
 
 This is the same as applying a decorator to `FooService`.
 
+### Binding multiple providers
+
+To bind more than one provider at once, use the `.bindAll()` method. It accepts any number of
+providers, either individually or as (nested) arrays:
+
+```ts twoslash
+import { Container, InjectionToken } from "@needle-di/core";
+import { FooService } from "./foo.service";
+import { BarService } from "./bar.service";
+import { MyConfig } from "./my-config";
+
+const MY_CONFIG = new InjectionToken<MyConfig>("MY_CONFIG");
+
+const container = new Container();
+
+container.bindAll(FooService, BarService, [
+  { provide: MY_CONFIG, useValue: { foo: "bar" } },
+]);
+```
+
+Every provider is type-checked individually, so the value you provide must always match the type of
+its token:
+
+```ts twoslash
+// @errors: 2322
+import { Container, InjectionToken } from "@needle-di/core";
+import { MyConfig } from "./my-config";
+
+const MY_CONFIG = new InjectionToken<MyConfig>("MY_CONFIG");
+const container = new Container();
+// ---cut---
+container.bindAll({ provide: MY_CONFIG, useValue: { foo: 42 } });
+```
+
+### Defining providers upfront
+
+Sometimes you want to declare a list of providers separately from the container, for example to
+group them per feature and share them between containers.
+
+Annotating such a list as `Provider<unknown>[]` would throw away the relation between a token and
+the value it provides, so no type-checking would happen at all. Use the `defineProviders()` function
+instead, which validates every provider and returns them as a single, flat array:
+
+```ts twoslash
+import { Container, InjectionToken, defineProviders } from "@needle-di/core";
+import { FooService } from "./foo.service";
+import { BarService } from "./bar.service";
+import { MyConfig } from "./my-config";
+
+const MY_CONFIG = new InjectionToken<MyConfig>("MY_CONFIG");
+
+const commonProviders = defineProviders(FooService, BarService);
+
+const testProviders = defineProviders(commonProviders, [
+  { provide: MY_CONFIG, useValue: { foo: "test" } },
+]);
+
+const container = new Container().bindAll(testProviders);
+```
+
+> [!TIP]
+> Since `defineProviders()` flattens its arguments, you can freely compose lists of providers by
+> nesting them, without having to spread them yourself.
+
 ## Clear binding
 
 To clear a binding, you can use the `.unbind()` or `.unbindAll()` method. This will also remove any instances of the
 service from the container.
 
-***
+The `.unbind()` method takes the token you want to unbind:
+
+```ts twoslash
+import { Container, InjectionToken } from "@needle-di/core";
+import { FooService } from "./foo.service";
+import { MyConfig } from "./my-config";
+
+const MY_CONFIG = new InjectionToken<MyConfig>("MY_CONFIG");
+
+const container = new Container();
+// ---cut---
+container.unbind(FooService);
+container.unbind(MY_CONFIG);
+```
+
+> [!NOTE]
+> Unbinding a token removes _all_ providers for that token, including any
+> [multi-providers](../advanced/multi-injection.md).
+
+If you unbind a token while an [asynchronous construction](../advanced/async-injection.md) for it is still
+in progress, that construction is abandoned: its result is discarded instead of being stored as an instance.
+Any pending `getAsync()` call that started it still resolves with the constructed value.
+
+---
 
 There are many different ways to bind services,
-check out the section about [providers](./providers) to learn more. 
+check out the section about [providers](./providers) to learn more.

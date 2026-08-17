@@ -1,4 +1,5 @@
 ---
+description: "Introduction to Needle DI: why it exists, why to use dependency injection, its design principles and when (not) to use it."
 outline: deep
 ---
 

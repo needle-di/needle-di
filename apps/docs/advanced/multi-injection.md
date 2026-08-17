@@ -1,3 +1,6 @@
+---
+description: "Bind multiple values to the same token with { multi: true } and inject them all as an array."
+---
 
 # Multi-injection
 

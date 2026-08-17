@@ -6,6 +6,7 @@ import { bootstrap, bootstrapAsync, Container } from "./container.ts";
 import { injectable } from "./decorators.ts";
 import { InjectionToken } from "./tokens.ts";
 import { inject, injectAsync } from "./context.ts";
+import { defineProviders } from "./providers.ts";
 
 const myServiceConstructorSpy = vi.fn();
 
@@ -128,6 +129,30 @@ describe("Container API", () => {
 
       expect(() => container3.get("e")).toThrowError("No provider(s) found for b");
       expect(() => container3.get("b")).toThrowError("No provider(s) found for b");
+    });
+
+    it("should do array nested binding on bindAll", () => {
+      const container = new Container().bindAll(
+        { provide: "c", useValue: "cValue" },
+        [{ provide: "d", useValue: "dValue" }],
+        [defineProviders([{ provide: "e", useValue: "eValue" }])],
+      );
+
+      expect(container.get("c")).toEqual("cValue");
+      expect(container.get("d")).toEqual("dValue");
+      expect(container.get("e")).toEqual("eValue");
+    });
+
+    it("should accept a spread array and a readonly array on bindAll", () => {
+      const providers = [
+        { provide: "f", useValue: "fValue" },
+        { provide: "g", useValue: "gValue" },
+      ] as const;
+
+      const container = new Container().bindAll(...providers).bindAll(providers);
+
+      expect(container.get("f")).toEqual("fValue");
+      expect(container.get("g")).toEqual("gValue");
     });
 
     // https://github.com/needle-di/needle-di/issues/103
@@ -778,25 +803,187 @@ describe("Container API", () => {
     });
   });
 
-  it("should unbind a single service", () => {
-    const container = new Container();
+  describe("unbind", () => {
+    it("should unbind a single service", () => {
+      const container = new Container();
 
-    container.bind({ provide: MyService, useClass: MyService });
+      container.bind({ provide: MyService, useClass: MyService });
 
-    expect(myServiceConstructorSpy).toHaveBeenCalledTimes(0);
+      expect(myServiceConstructorSpy).toHaveBeenCalledTimes(0);
 
-    const myService1 = container.get(MyService);
-    const myService2 = container.get(MyService);
+      const myService1 = container.get(MyService);
+      const myService2 = container.get(MyService);
 
-    expect(myServiceConstructorSpy).toHaveBeenCalledTimes(1);
-    expect(myService1).toBe(myService2);
+      expect(myServiceConstructorSpy).toHaveBeenCalledTimes(1);
+      expect(myService1).toBe(myService2);
 
-    container.unbind(MyService);
+      container.unbind(MyService);
 
-    const myService3 = container.get(MyService);
+      const myService3 = container.get(MyService);
 
-    expect(myServiceConstructorSpy).toHaveBeenCalledTimes(2);
-    expect(myService3).not.toBe(myService1);
-    expect(myService3).not.toBe(myService2);
+      expect(myServiceConstructorSpy).toHaveBeenCalledTimes(2);
+      expect(myService3).not.toBe(myService1);
+      expect(myService3).not.toBe(myService2);
+    });
+
+    it("should accept an injection token", () => {
+      const token = new InjectionToken<string>("some-token");
+      const container = new Container();
+
+      container.bind({ provide: token, useValue: "foo" });
+
+      expect(container.get(token)).toBe("foo");
+
+      container.unbind(token);
+
+      expect(container.has(token)).toBe(false);
+      expect(() => container.get(token)).toThrowError("No provider(s) found");
+    });
+
+    it("should accept a string or symbol token", () => {
+      const symbolToken = Symbol("some-symbol");
+      const container = new Container();
+
+      container.bind({ provide: "some-string", useValue: "foo" });
+      container.bind({ provide: symbolToken, useValue: "bar" });
+
+      container.unbind("some-string");
+      container.unbind(symbolToken);
+
+      expect(container.has("some-string")).toBe(false);
+      expect(container.has(symbolToken)).toBe(false);
+    });
+
+    it("should unbind all multi-providers for a token", () => {
+      const token = new InjectionToken<string>("some-token");
+      const container = new Container();
+
+      container.bindAll(
+        { provide: token, useValue: "foo", multi: true },
+        { provide: token, useValue: "bar", multi: true },
+      );
+
+      expect(container.get(token, { multi: true })).toEqual(["foo", "bar"]);
+
+      container.unbind(token);
+
+      expect(container.has(token)).toBe(false);
+    });
+
+    it("should unbind an asynchronously constructed service", async () => {
+      const token = new InjectionToken<string>("some-token");
+      const factorySpy = vi.fn(async () => {
+        await delay(1);
+        return "foo";
+      });
+
+      const container = new Container();
+      container.bind({ provide: token, async: true, useFactory: factorySpy });
+
+      await expect(container.getAsync(token)).resolves.toBe("foo");
+
+      container.unbind(token);
+
+      expect(container.has(token)).toBe(false);
+
+      container.bind({ provide: token, async: true, useFactory: factorySpy });
+
+      await expect(container.getAsync(token)).resolves.toBe("foo");
+      expect(factorySpy).toHaveBeenCalledTimes(2);
+    });
+
+    // https://github.com/needle-di/needle-di/issues/117
+    it("should not let an in-flight construction re-populate a token that was unbound", async () => {
+      const token = new InjectionToken<string>("some-token");
+
+      const container = new Container();
+      container.bind({
+        provide: token,
+        async: true,
+        useFactory: async () => {
+          await delay(1);
+          return "foo";
+        },
+      });
+
+      const pending = container.getAsync(token);
+
+      container.unbind(token);
+      expect(container.has(token)).toBe(false);
+
+      // The caller that started the construction still observes its result.
+      await expect(pending).resolves.toBe("foo");
+
+      // The settled construction must not have left an instance behind, so the token
+      // can be bound again.
+      expect(container.has(token)).toBe(false);
+
+      container.bind({ provide: token, async: true, useFactory: async () => "bar" });
+
+      await expect(container.getAsync(token)).resolves.toBe("bar");
+    });
+
+    it("should not let an in-flight construction overwrite the instance of a rebound token", async () => {
+      const token = new InjectionToken<string>("some-token");
+
+      const container = new Container();
+      container.bind({
+        provide: token,
+        async: true,
+        useFactory: async () => {
+          await delay(1);
+          return "foo";
+        },
+      });
+
+      const pending = container.getAsync(token);
+
+      container.unbind(token);
+      container.bind({ provide: token, async: true, useFactory: async () => "bar" });
+
+      await expect(container.getAsync(token)).resolves.toBe("bar");
+      await expect(pending).resolves.toBe("foo");
+
+      expect(container.get(token)).toBe("bar");
+    });
+
+    it("should not let a failed construction of an unbound token discard a newer one", async () => {
+      const token = new InjectionToken<{ name: string }>("some-token");
+
+      let failFirst!: () => void;
+      const firstGate = new Promise<void>((resolve) => (failFirst = resolve));
+
+      const container = new Container();
+      container.bind({
+        provide: token,
+        async: true,
+        useFactory: async () => {
+          await firstGate;
+          throw new Error("transient failure");
+        },
+      });
+
+      const failing = container.getAsync(token).catch((error: Error) => error);
+
+      container.unbind(token);
+
+      const factorySpy = vi.fn(async () => {
+        await delay(1);
+        return { name: "second" };
+      });
+      container.bind({ provide: token, async: true, useFactory: factorySpy });
+
+      // Start the replacement construction, then let the superseded one fail. Its
+      // rejection must not clear the entry that the replacement is tracked under,
+      // as that would let a second construction start alongside it.
+      const second = container.getAsync(token);
+      failFirst();
+      await expect(failing).resolves.toBeInstanceOf(Error);
+
+      const third = container.getAsync(token);
+
+      expect(await second).toBe(await third);
+      expect(factorySpy).toHaveBeenCalledTimes(1);
+    });
   });
 });

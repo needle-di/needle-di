@@ -1,4 +1,5 @@
 ---
+description: "The provider types of Needle DI: class providers, existing providers, factory providers, value providers, and multi-providers."
 outline: deep
 ---
 

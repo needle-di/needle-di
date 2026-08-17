@@ -1,3 +1,6 @@
+---
+description: "Defer service construction with { lazy: true }, which returns a function that creates the service on demand and enables circular dependencies."
+---
 
 # Lazy injection
 

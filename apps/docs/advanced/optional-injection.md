@@ -1,3 +1,6 @@
+---
+description: "Use inject(token, { optional: true }) to get undefined instead of an error when no binding exists."
+---
 
 # Optional injection
 

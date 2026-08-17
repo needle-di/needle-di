@@ -1,3 +1,7 @@
+---
+description: "Use asynchronous factory providers with getAsync() and injectAsync(), and how async dependencies can be injected synchronously afterwards."
+---
+
 # Async injection
 
 It is also possible to use a provider with an asynchronous factory function.

@@ -1,8 +1,8 @@
 import { type Token, isClassToken, toString, isInjectionToken, getToken } from "./tokens.ts";
 import * as Guards from "./providers.ts";
-import type { Provider } from "./providers.ts";
+import type { Provider, ProviderList } from "./providers.ts";
 import { getInjectableTargets, isInjectable } from "./decorators.ts";
-import { assertPresent, assertSingle, getParentClasses, promiseTry, windowedSlice } from "./utils.ts";
+import { assertPresent, assertSingle, flattenDeep, getParentClasses, promiseTry, windowedSlice } from "./utils.ts";
 import { assertNoCycle, Factory, type ResolutionChain } from "./factory.ts";
 import { currentResolutionChain, injectionContext } from "./context.ts";
 
@@ -37,75 +37,15 @@ export class Container {
   /**
    * Binds multiple providers to this container.
    *
-   * {@link https://needle-di.io/concepts/binding.html#binding}
+   * Providers may be passed individually or as (nested) arrays. To define a list of providers
+   * upfront, outside of a container, use `defineProviders()`.
+   *
+   * @param providers one or more providers, optionally nested in arrays
+   *
+   * {@link https://needle-di.io/concepts/binding.html#binding-multiple-providers}
    */
-  public bindAll<A>(p1: Provider<A>): this;
-  public bindAll<A, B>(p1: Provider<A>, p2: Provider<B>): this;
-  public bindAll<A, B, C>(p1: Provider<A>, p2: Provider<B>, p3: Provider<C>): this;
-  public bindAll<A, B, C, D>(p1: Provider<A>, p2: Provider<B>, p3: Provider<C>, p4: Provider<D>): this;
-  public bindAll<A, B, C, D, E>(
-    p1: Provider<A>,
-    p2: Provider<B>,
-    p3: Provider<C>,
-    p4: Provider<D>,
-    p5: Provider<E>,
-  ): this;
-  public bindAll<A, B, C, D, E, F>(
-    p1: Provider<A>,
-    p2: Provider<B>,
-    p3: Provider<C>,
-    p4: Provider<D>,
-    p5: Provider<E>,
-    p6: Provider<F>,
-  ): this;
-  // noinspection JSUnusedGlobalSymbols
-  public bindAll<A, B, C, D, E, F, G>(
-    p1: Provider<A>,
-    p2: Provider<B>,
-    p3: Provider<C>,
-    p4: Provider<D>,
-    p5: Provider<E>,
-    p6: Provider<F>,
-    p7: Provider<G>,
-  ): this;
-  public bindAll<A, B, C, D, E, F, G, H>(
-    p1: Provider<A>,
-    p2: Provider<B>,
-    p3: Provider<C>,
-    p4: Provider<D>,
-    p5: Provider<E>,
-    p6: Provider<F>,
-    p7: Provider<G>,
-    p8: Provider<H>,
-  ): this;
-  // noinspection JSUnusedGlobalSymbols
-  public bindAll<A, B, C, D, E, F, G, H, I>(
-    p1: Provider<A>,
-    p2: Provider<B>,
-    p3: Provider<C>,
-    p4: Provider<D>,
-    p5: Provider<E>,
-    p6: Provider<F>,
-    p7: Provider<G>,
-    p8: Provider<H>,
-    p9: Provider<I>,
-  ): this;
-  public bindAll<A, B, C, D, E, F, G, H, I>(
-    p1: Provider<A>,
-    p2: Provider<B>,
-    p3: Provider<C>,
-    p4: Provider<D>,
-    p5: Provider<E>,
-    p6: Provider<F>,
-    p7: Provider<G>,
-    p8: Provider<H>,
-    p9: Provider<I>,
-    // eslint-disable-next-line
-    ...providers: Provider<any>[]
-  ): this;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  public bindAll(...providers: Provider<any>[]): this {
-    providers.forEach((it) => this.bind(it));
+  public bindAll<T extends readonly unknown[]>(...providers: ProviderList<T>): this {
+    flattenDeep<Provider<unknown>>(providers as readonly unknown[]).forEach((it) => this.bind(it));
     return this;
   }
 
@@ -176,13 +116,14 @@ export class Container {
   }
 
   /**
-   * Unbinds a provider.
+   * Unbinds a token.
    *
-   * {@link https://needle-di.io/concepts/binding.html#binding}
+   * This removes all providers for that token, including multi-providers,
+   * as well as any instances that were already constructed.
+   *
+   * {@link https://needle-di.io/concepts/binding.html#clear-binding}
    */
-  public unbind<T>(provider: Provider<T>): this {
-    const token = getToken(provider);
-
+  public unbind<T>(token: Token<T>): this {
     this.providers.delete(token);
     this.singletons.delete(token);
     this.pending.delete(token);
@@ -346,16 +287,20 @@ export class Container {
 
       const providers = assertPresent(this.providers.get(token));
 
-      if (!this.singletons.has(token)) {
+      let singletons = this.singletons.get(token);
+
+      if (!singletons) {
         // Cycle detection has to happen before we join an in-flight construction below:
         // a genuine cycle would otherwise await the pending promise of a token that is
         // waiting on us, and hang instead of reporting itself.
         providers.forEach((provider) => assertNoCycle(chain, provider));
 
-        await this.constructOnce(token, providers, chain);
+        // We use the values the construction produced instead of reading `singletons`
+        // back, so that a token that was unbound while we were suspended still resolves
+        // to the result of the construction we started.
+        singletons = await this.constructOnce(token, providers, chain);
       }
 
-      const singletons = assertPresent(this.singletons.get(token));
       const multi = options?.multi ?? false;
 
       if (multi) {
@@ -417,32 +362,41 @@ export class Container {
    * instance. Callers that join an already running construction inherit its result,
    * not its chain: their own chain has already been checked for cycles by the caller.
    */
-  private constructOnce<T>(token: Token<T>, providers: Provider<T>[], chain: ResolutionChain): Promise<void> {
-    let pending = this.pending.get(token);
+  private constructOnce<T>(token: Token<T>, providers: Provider<T>[], chain: ResolutionChain): Promise<T[]> {
+    const existing = this.pending.get(token);
 
-    if (!pending) {
-      pending = promiseTry(async () => {
-        const values = await Promise.all(providers.map((it) => this.factory.constructAsync(it, chain)));
-        return values.flat();
-      });
-
-      this.pending.set(token, pending);
-
-      // Registered before the promise is handed out, so that by the time any caller
-      // resumes, the singleton is already recorded and `pending` is cleaned up.
-      pending.then(
-        (values) => {
-          this.pending.delete(token);
-          this.singletons.set(token, values);
-        },
-        () => {
-          // A failed construction must not be cached, so a later attempt can retry.
-          this.pending.delete(token);
-        },
-      );
+    if (existing) {
+      return existing;
     }
 
-    return pending.then(() => undefined);
+    const pending = promiseTry(async () => {
+      const values = await Promise.all(providers.map((it) => this.factory.constructAsync(it, chain)));
+      return values.flat();
+    });
+
+    this.pending.set(token, pending);
+
+    // A construction may only write back if it is still the current one for this token.
+    // If it was unbound or superseded while in flight, the container has moved on and
+    // storing the result would resurrect a token that is no longer bound.
+    const isCurrent = () => this.pending.get(token) === pending;
+
+    pending.then(
+      (values) => {
+        if (isCurrent()) {
+          this.pending.delete(token);
+          this.singletons.set(token, values);
+        }
+      },
+      () => {
+        // A failed construction must not be cached, so a later attempt can retry.
+        if (isCurrent()) {
+          this.pending.delete(token);
+        }
+      },
+    );
+
+    return pending;
   }
 
   private autoBindIfNeeded<T>(token: Token<T>) {

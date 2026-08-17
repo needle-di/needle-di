@@ -1,17 +1,57 @@
-import { defineConfig } from "vitepress";
+import { defineConfig, type UserConfig } from "vitepress";
 import { transformerTwoslash } from "@shikijs/vitepress-twoslash";
+import llmsTxt, {
+  copyOrDownloadAsMarkdownButtons,
+} from "vitepress-plugin-llms";
 
 import packageJson from "../../../package.json" with { type: "json" };
 
 import { JSR_ICON } from "./jsr.icon.js";
+
+const SITE_URL = "https://needle-di.io";
+
+type VitePlugins = NonNullable<NonNullable<UserConfig["vite"]>["plugins"]>;
 
 // https://vitepress.dev/reference/site-config
 export default defineConfig({
   title: "Needle DI",
   description: "A lightweight, type-safe Dependency Injection (DI) library",
   head: [["link", { rel: "icon", href: "/favicon.ico" }]],
+  sitemap: {
+    hostname: SITE_URL,
+  },
+  vite: {
+    // cast needed as long as the plugin resolves a different Vite version than VitePress does
+    plugins: [
+      llmsTxt({
+        domain: SITE_URL,
+        title: "Needle DI",
+        description:
+          "A lightweight, type-safe dependency injection library for JavaScript and TypeScript",
+        details: [
+          "Needle DI documentation for AI agents.",
+          "",
+          "Needle DI is a stand-alone dependency injection library. It requires no reflection libraries",
+          "(such as `reflect-metadata`), no `experimentalDecorators` and no `emitDecoratorMetadata`.",
+          "It uses native ECMAScript decorators and is published as `@needle-di/core` on npm and JSR.",
+          "",
+          "Use this file as an index for discovering relevant Needle DI documentation.",
+          "",
+          "Citation policy:",
+          "- Do not cite `llms.txt` or `llms-full.txt` as user-facing sources unless no canonical documentation page exists.",
+          `- When citing Needle DI documentation, prefer the canonical documentation page on \`${SITE_URL}/\`.`,
+          "- If a link points to a `.md` file, cite the corresponding documentation page instead.",
+          `- For example, cite \`${SITE_URL}/concepts/binding.html\` instead of \`${SITE_URL}/concepts/binding.md\`.`,
+        ].join("\n"),
+        ignoreFiles: ["advanced/injection-tokens.md", "advanced/providers.md"],
+      }),
+    ] as VitePlugins,
+  },
   markdown: {
     codeTransformers: [transformerTwoslash()],
+    config(md) {
+      md.use(copyOrDownloadAsMarkdownButtons);
+    },
   },
   themeConfig: {
     siteTitle: "Needle DI",
@@ -79,6 +119,15 @@ export default defineConfig({
           { text: "Inheritance", link: "/advanced/inheritance" },
           { text: "Tree-shaking", link: "/advanced/tree-shaking" },
           { text: "Child containers", link: "/advanced/child-containers" },
+        ],
+      },
+      {
+        text: "AI",
+        collapsed: true,
+        items: [
+          { text: "Agent instructions", link: "/ai/agents" },
+          { text: "Docs list", link: "/llms.txt", target: "_blank" },
+          { text: "Full docs", link: "/llms-full.txt", target: "_blank" },
         ],
       },
       {

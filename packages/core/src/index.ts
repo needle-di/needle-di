@@ -12,6 +12,8 @@ export type {
   FactoryProvider,
   AsyncFactoryProvider,
   SyncFactoryProvider,
+  ProviderList,
 } from "./providers.ts";
+export { defineProviders } from "./providers.ts";
 export { InjectionToken } from "./tokens.ts";
 export type { Token } from "./tokens.ts";

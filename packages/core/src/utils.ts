@@ -32,6 +32,15 @@ export function getParentClasses(target: Class<unknown>): Class<unknown>[] {
 }
 
 /**
+ * Recursively flattens an arbitrarily nested array into a flat array.
+ *
+ * @internal
+ */
+export function flattenDeep<T>(values: readonly unknown[]): T[] {
+  return values.flat(Infinity) as T[];
+}
+
+/**
  * Ensures a given value is not null or undefined.
  *
  * @internal

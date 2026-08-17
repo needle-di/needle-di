@@ -1,8 +1,8 @@
 import { type Token, isClassToken, toString, isInjectionToken, getToken } from "./tokens.ts";
 import * as Guards from "./providers.ts";
-import type { Provider } from "./providers.ts";
+import type { Provider, ProviderList } from "./providers.ts";
 import { getInjectableTargets, isInjectable } from "./decorators.ts";
-import { assertPresent, assertSingle, getParentClasses, promiseTry, windowedSlice } from "./utils.ts";
+import { assertPresent, assertSingle, flattenDeep, getParentClasses, promiseTry, windowedSlice } from "./utils.ts";
 import { assertNoCycle, Factory, type ResolutionChain } from "./factory.ts";
 import { currentResolutionChain } from "./context.ts";
 
@@ -37,75 +37,15 @@ export class Container {
   /**
    * Binds multiple providers to this container.
    *
-   * {@link https://needle-di.io/concepts/binding.html#binding}
+   * Providers may be passed individually or as (nested) arrays. To define a list of providers
+   * upfront, outside of a container, use `defineProviders()`.
+   *
+   * @param providers one or more providers, optionally nested in arrays
+   *
+   * {@link https://needle-di.io/concepts/binding.html#binding-multiple-providers}
    */
-  public bindAll<A>(p1: Provider<A>): this;
-  public bindAll<A, B>(p1: Provider<A>, p2: Provider<B>): this;
-  public bindAll<A, B, C>(p1: Provider<A>, p2: Provider<B>, p3: Provider<C>): this;
-  public bindAll<A, B, C, D>(p1: Provider<A>, p2: Provider<B>, p3: Provider<C>, p4: Provider<D>): this;
-  public bindAll<A, B, C, D, E>(
-    p1: Provider<A>,
-    p2: Provider<B>,
-    p3: Provider<C>,
-    p4: Provider<D>,
-    p5: Provider<E>,
-  ): this;
-  public bindAll<A, B, C, D, E, F>(
-    p1: Provider<A>,
-    p2: Provider<B>,
-    p3: Provider<C>,
-    p4: Provider<D>,
-    p5: Provider<E>,
-    p6: Provider<F>,
-  ): this;
-  // noinspection JSUnusedGlobalSymbols
-  public bindAll<A, B, C, D, E, F, G>(
-    p1: Provider<A>,
-    p2: Provider<B>,
-    p3: Provider<C>,
-    p4: Provider<D>,
-    p5: Provider<E>,
-    p6: Provider<F>,
-    p7: Provider<G>,
-  ): this;
-  public bindAll<A, B, C, D, E, F, G, H>(
-    p1: Provider<A>,
-    p2: Provider<B>,
-    p3: Provider<C>,
-    p4: Provider<D>,
-    p5: Provider<E>,
-    p6: Provider<F>,
-    p7: Provider<G>,
-    p8: Provider<H>,
-  ): this;
-  // noinspection JSUnusedGlobalSymbols
-  public bindAll<A, B, C, D, E, F, G, H, I>(
-    p1: Provider<A>,
-    p2: Provider<B>,
-    p3: Provider<C>,
-    p4: Provider<D>,
-    p5: Provider<E>,
-    p6: Provider<F>,
-    p7: Provider<G>,
-    p8: Provider<H>,
-    p9: Provider<I>,
-  ): this;
-  public bindAll<A, B, C, D, E, F, G, H, I>(
-    p1: Provider<A>,
-    p2: Provider<B>,
-    p3: Provider<C>,
-    p4: Provider<D>,
-    p5: Provider<E>,
-    p6: Provider<F>,
-    p7: Provider<G>,
-    p8: Provider<H>,
-    p9: Provider<I>,
-    // eslint-disable-next-line
-    ...providers: Provider<any>[]
-  ): this;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  public bindAll(...providers: Provider<any>[]): this {
-    providers.forEach((it) => this.bind(it));
+  public bindAll<T extends readonly unknown[]>(...providers: ProviderList<T>): this {
+    flattenDeep<Provider<unknown>>(providers as readonly unknown[]).forEach((it) => this.bind(it));
     return this;
   }
 

@@ -6,6 +6,7 @@ import { bootstrap, bootstrapAsync, Container } from "./container.ts";
 import { injectable } from "./decorators.ts";
 import { InjectionToken } from "./tokens.ts";
 import { inject, injectAsync } from "./context.ts";
+import { defineProviders } from "./providers.ts";
 
 const myServiceConstructorSpy = vi.fn();
 
@@ -128,6 +129,30 @@ describe("Container API", () => {
 
       expect(() => container3.get("e")).toThrowError("No provider(s) found for b");
       expect(() => container3.get("b")).toThrowError("No provider(s) found for b");
+    });
+
+    it("should do array nested binding on bindAll", () => {
+      const container = new Container().bindAll(
+        { provide: "c", useValue: "cValue" },
+        [{ provide: "d", useValue: "dValue" }],
+        [defineProviders([{ provide: "e", useValue: "eValue" }])],
+      );
+
+      expect(container.get("c")).toEqual("cValue");
+      expect(container.get("d")).toEqual("dValue");
+      expect(container.get("e")).toEqual("eValue");
+    });
+
+    it("should accept a spread array and a readonly array on bindAll", () => {
+      const providers = [
+        { provide: "f", useValue: "fValue" },
+        { provide: "g", useValue: "gValue" },
+      ] as const;
+
+      const container = new Container().bindAll(...providers).bindAll(providers);
+
+      expect(container.get("f")).toEqual("fValue");
+      expect(container.get("g")).toEqual("gValue");
     });
 
     // https://github.com/needle-di/needle-di/issues/103

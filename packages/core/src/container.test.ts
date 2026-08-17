@@ -276,6 +276,7 @@ describe("Container API", () => {
       await expect(container.getAsync(tokenA)).rejects.toThrowError(/circular dependency/i);
     });
 
+    // https://github.com/needle-di/needle-di/issues/113
     // The tests below generalize https://github.com/needle-di/needle-di/issues/102.
     // That issue was reported as an unwinding problem: `constructAsync`'s `finally { pop() }`
     // removed another construction's entry when concurrent constructions settled out of LIFO

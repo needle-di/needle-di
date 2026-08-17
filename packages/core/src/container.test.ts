@@ -1,9 +1,11 @@
+import { setTimeout as delay } from "node:timers/promises";
+
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { bootstrap, bootstrapAsync, Container } from "./container.ts";
 import { injectable } from "./decorators.ts";
 import { InjectionToken } from "./tokens.ts";
-import { inject, injectAsync, InjectionContext, NeedsInjectionContextError } from "./context.ts";
+import { inject, injectAsync } from "./context.ts";
 
 const myServiceConstructorSpy = vi.fn();
 
@@ -199,55 +201,12 @@ describe("Container API", () => {
 
       // While the construction above is suspended, unrelated code must still be
       // outside any injection context.
-      expect(() => inject("value")).toThrowError(NeedsInjectionContextError);
+      expect(() => inject("value")).toThrowError(
+        "You can only invoke inject() or injectAsync() within an injection context",
+      );
 
       release();
       await expect(pending).resolves.toBe("done");
-    });
-
-    it("should expose an injection context to be used anywhere and obtain services using inject()", async () => {
-      const token = new InjectionToken<string>("suspended");
-      const comparedValue = "woooo";
-
-      const container = new Container();
-      container.bind({
-        provide: token,
-        useValue: comparedValue,
-      });
-
-      const funcTest = () => inject(token);
-
-      const execution = container.get(InjectionContext).run(() => funcTest());
-
-      expect(execution).toBe(comparedValue);
-    });
-
-    it("should not allow execution of asynchronous functions on InjectionContext.run", async () => {
-      const token = new InjectionToken<string>("suspended");
-      const comparedValue = "woooo";
-
-      let release!: () => void;
-      const outsideOfInjection = new Promise<void>((resolve) => (release = resolve));
-      // let reachedAwait!: () => void;
-      // const insideInjection = new Promise<void>((resolve) => (reachedAwait = resolve));
-
-      const container = new Container();
-      container.bind({
-        provide: token,
-        useValue: comparedValue,
-      });
-
-      const funcTest = async () => {
-        expect(inject(token)).toBe(comparedValue);
-        await outsideOfInjection;
-        expect(() => inject(token)).toThrow(NeedsInjectionContextError);
-      };
-
-      const execution = container.get(InjectionContext).run(() => funcTest());
-
-      release();
-
-      await execution;
     });
   });
 
@@ -315,6 +274,373 @@ describe("Container API", () => {
       });
 
       await expect(container.getAsync(tokenA)).rejects.toThrowError(/circular dependency/i);
+    });
+
+    // https://github.com/needle-di/needle-di/issues/113
+    // The tests below generalize https://github.com/needle-di/needle-di/issues/102.
+    // That issue was reported as an unwinding problem: `constructAsync`'s `finally { pop() }`
+    // removed another construction's entry when concurrent constructions settled out of LIFO
+    // order, stranding entries on the shared `underConstruction` stack. The narrower fix made
+    // each construction remove its own entry by identity, but kept the stack container-wide.
+    // Nothing has to go wrong with unwinding, though: while a construction is suspended its
+    // entries are simply visible to every other resolution, so any two overlapping resolutions
+    // collide on whatever they have in common. Tracking is now per resolution instead.
+    it("should not report a circular dependency for independent resolutions sharing a token", async () => {
+      const shared = new InjectionToken<string>("SHARED");
+      const tokenA = new InjectionToken<string>("A");
+      const tokenB = new InjectionToken<string>("B");
+
+      const sharedSpy = vi.fn();
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => (release = resolve));
+
+      const container = new Container();
+      container.bind({
+        provide: shared,
+        async: true,
+        useFactory: async () => {
+          sharedSpy();
+          await gate; // keeps both resolutions overlapping
+          return "shared";
+        },
+      });
+      container.bind({ provide: tokenA, async: true, useFactory: async () => `A(${await injectAsync(shared)})` });
+      container.bind({ provide: tokenB, async: true, useFactory: async () => `B(${await injectAsync(shared)})` });
+
+      const pending = Promise.all([container.getAsync(tokenA), container.getAsync(tokenB)]);
+      release();
+
+      await expect(pending).resolves.toEqual(["A(shared)", "B(shared)"]);
+      expect(sharedSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("should share a single construction between concurrent requests for the same token", async () => {
+      const token = new InjectionToken<MyService>("SHARED");
+
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => (release = resolve));
+
+      const container = new Container();
+      container.bind({
+        provide: token,
+        async: true,
+        useFactory: async () => {
+          await gate;
+          return new MyService();
+        },
+      });
+
+      const pending = Promise.all([container.getAsync(token), container.getAsync(token)]);
+      release();
+
+      const [first, second] = await pending;
+      expect(first).toBeInstanceOf(MyService);
+      expect(first).toBe(second);
+      expect(myServiceConstructorSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("should not report a circular dependency for concurrent resolutions through an alias", async () => {
+      const target = new InjectionToken<string>("TARGET");
+      const alias = new InjectionToken<string>("ALIAS");
+
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => (release = resolve));
+
+      const container = new Container();
+      container.bind({
+        provide: target,
+        async: true,
+        useFactory: async () => {
+          await gate;
+          return "value";
+        },
+      });
+      container.bind({ provide: alias, useExisting: target });
+
+      const pending = Promise.all([container.getAsync(alias), container.getAsync(alias)]);
+      release();
+
+      await expect(pending).resolves.toEqual(["value", "value"]);
+    });
+
+    it("should not report a circular dependency for sibling containers sharing a parent's token", async () => {
+      // NOTE: no token-level factory here, otherwise `autoBindIfNeeded` would bind a
+      // separate provider on each child and the parent would never be consulted.
+      const shared = new InjectionToken<string>("SHARED");
+      const tokenA = new InjectionToken<string>("A");
+      const tokenB = new InjectionToken<string>("B");
+
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => (release = resolve));
+
+      const parent = new Container();
+      parent.bind({
+        provide: shared,
+        async: true,
+        useFactory: async () => {
+          await gate;
+          return "shared";
+        },
+      });
+
+      const child1 = parent.createChild();
+      child1.bind({ provide: tokenA, async: true, useFactory: async () => `A(${await injectAsync(shared)})` });
+      const child2 = parent.createChild();
+      child2.bind({ provide: tokenB, async: true, useFactory: async () => `B(${await injectAsync(shared)})` });
+
+      const pending = Promise.all([child1.getAsync(tokenA), child2.getAsync(tokenB)]);
+      release();
+
+      await expect(pending).resolves.toEqual(["A(shared)", "B(shared)"]);
+    });
+
+    it("should not report a circular dependency for a sync resolution while an async one is suspended", async () => {
+      const target = new InjectionToken<string>("TARGET");
+      const alias = new InjectionToken<string>("ALIAS");
+
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => (release = resolve));
+
+      const container = new Container();
+      container.bind({
+        provide: target,
+        async: true,
+        useFactory: async () => {
+          await gate;
+          return "value";
+        },
+      });
+      container.bind({ provide: alias, useExisting: target });
+
+      const pending = container.getAsync(alias);
+
+      // The alias is mid-flight on another resolution. Resolving it synchronously must
+      // complain about the async provider, not about a circular dependency.
+      expect(() => container.get(alias)).toThrowError(/are async, please use injectAsync/);
+
+      release();
+      await expect(pending).resolves.toBe("value");
+    });
+
+    it("should not report a circular dependency for auto-bound token factories", async () => {
+      const shared = new InjectionToken<string>("SHARED", {
+        async: true,
+        factory: async () => {
+          await delay(10);
+          return "shared";
+        },
+      });
+      const tokenA = new InjectionToken<string>("A", {
+        async: true,
+        factory: async () => `A(${await injectAsync(shared)})`,
+      });
+      const tokenB = new InjectionToken<string>("B", {
+        async: true,
+        factory: async () => `B(${await injectAsync(shared)})`,
+      });
+
+      const container = new Container();
+
+      await expect(Promise.all([container.getAsync(tokenA), container.getAsync(tokenB)])).resolves.toEqual([
+        "A(shared)",
+        "B(shared)",
+      ]);
+    });
+
+    it("should keep many overlapping resolutions of a shared diamond consistent", async () => {
+      const leaf = new InjectionToken<{ id: number }>("LEAF");
+      const left = new InjectionToken<string>("LEFT");
+      const right = new InjectionToken<string>("RIGHT");
+      const root = new InjectionToken<string>("ROOT");
+
+      let leafCount = 0;
+      const container = new Container();
+      container.bind({
+        provide: leaf,
+        async: true,
+        useFactory: async () => {
+          await delay(Math.random() * 5);
+          return { id: ++leafCount };
+        },
+      });
+      container.bind({
+        provide: left,
+        async: true,
+        useFactory: async () => {
+          const dep = injectAsync(leaf);
+          await delay(Math.random() * 5);
+          return `left(${(await dep).id})`;
+        },
+      });
+      container.bind({
+        provide: right,
+        async: true,
+        useFactory: async () => {
+          const dep = injectAsync(leaf);
+          await delay(Math.random() * 5);
+          return `right(${(await dep).id})`;
+        },
+      });
+      container.bind({
+        provide: root,
+        async: true,
+        useFactory: async () => {
+          const [l, r] = [injectAsync(left), injectAsync(right)];
+          return `${await l}+${await r}`;
+        },
+      });
+
+      const results = await Promise.all(
+        Array.from({ length: 50 }, () =>
+          Promise.all([container.getAsync(root), container.getAsync(left), container.getAsync(right)]),
+        ),
+      );
+
+      expect(leafCount).toBe(1);
+      results.forEach((result) => expect(result).toEqual(["left(1)+right(1)", "left(1)", "right(1)"]));
+    });
+
+    it("should not cache a failed async construction", async () => {
+      const token = new InjectionToken<string>("FLAKY");
+
+      let attempts = 0;
+      const container = new Container();
+      container.bind({
+        provide: token,
+        async: true,
+        useFactory: async () => {
+          attempts += 1;
+          await delay(1);
+          if (attempts < 3) {
+            throw new Error(`boom ${attempts}`);
+          }
+          return "ok";
+        },
+      });
+
+      await expect(Promise.all([container.getAsync(token), container.getAsync(token)])).rejects.toThrowError("boom 1");
+      expect(attempts).toBe(1); // both callers joined the same attempt
+
+      await expect(container.getAsync(token)).rejects.toThrowError("boom 2");
+      await expect(container.getAsync(token)).resolves.toBe("ok");
+    });
+  });
+
+  describe("circular dependencies", () => {
+    it("should report an accurate path for a sync cycle between factory providers", () => {
+      const tokenA = new InjectionToken<string>("A");
+      const tokenB = new InjectionToken<string>("B");
+
+      const container = new Container();
+      container.bind({ provide: tokenA, useFactory: () => `a(${inject(tokenB)})` });
+      container.bind({ provide: tokenB, useFactory: () => `b(${inject(tokenA)})` });
+
+      expect(() => container.get(tokenA)).toThrowError(
+        'Detected circular dependency: InjectionToken "A" -> InjectionToken "B" -> InjectionToken "A".',
+      );
+    });
+
+    it("should report an accurate path for an async cycle between factory providers", async () => {
+      const tokenA = new InjectionToken<string>("A");
+      const tokenB = new InjectionToken<string>("B");
+      const tokenC = new InjectionToken<string>("C");
+
+      const container = new Container();
+      container.bind({ provide: tokenA, async: true, useFactory: async () => `a(${await injectAsync(tokenB)})` });
+      container.bind({ provide: tokenB, async: true, useFactory: async () => `b(${await injectAsync(tokenC)})` });
+      container.bind({ provide: tokenC, async: true, useFactory: async () => `c(${await injectAsync(tokenA)})` });
+
+      await expect(container.getAsync(tokenA)).rejects.toThrowError(
+        'Detected circular dependency: InjectionToken "A" -> InjectionToken "B" -> InjectionToken "C" -> InjectionToken "A".',
+      );
+    });
+
+    it("should report an accurate path for a self-referencing provider", async () => {
+      const token = new InjectionToken<string>("SELF");
+
+      const syncContainer = new Container();
+      syncContainer.bind({ provide: token, useFactory: () => `self(${inject(token)})` });
+      expect(() => syncContainer.get(token)).toThrowError(
+        'Detected circular dependency: InjectionToken "SELF" -> InjectionToken "SELF".',
+      );
+
+      const asyncContainer = new Container();
+      asyncContainer.bind({ provide: token, async: true, useFactory: async () => `self(${await injectAsync(token)})` });
+      await expect(asyncContainer.getAsync(token)).rejects.toThrowError(
+        'Detected circular dependency: InjectionToken "SELF" -> InjectionToken "SELF".',
+      );
+    });
+
+    it("should detect a cycle between class providers, both sync and async", async () => {
+      class Foo {
+        bar: unknown = inject(Bar);
+      }
+      class Bar {
+        foo: unknown = inject(Foo);
+      }
+
+      const bindings = (container: Container) =>
+        container.bind({ provide: Foo, useClass: Foo }).bind({ provide: Bar, useClass: Bar });
+
+      expect(() => bindings(new Container()).get(Foo)).toThrowError("Detected circular dependency: Foo -> Bar -> Foo.");
+      await expect(bindings(new Container()).getAsync(Foo)).rejects.toThrowError(
+        "Detected circular dependency: Foo -> Bar -> Foo.",
+      );
+    });
+
+    it("should detect a cycle that runs through an async dependency of a class provider", async () => {
+      const token = new InjectionToken<string>("ASYNC");
+
+      class Widget {
+        value = inject(token);
+      }
+
+      const container = new Container();
+      container.bind({ provide: Widget, useClass: Widget });
+      container.bind({
+        provide: token,
+        async: true,
+        useFactory: async () => `async(${(await injectAsync(Widget)).value})`,
+      });
+
+      await expect(container.getAsync(Widget)).rejects.toThrowError(
+        'Detected circular dependency: Widget -> InjectionToken "ASYNC" -> Widget.',
+      );
+    });
+
+    it("should report the full path of a cycle reached through a parent container", () => {
+      const parentA = new InjectionToken<string>("PARENT_A");
+      const parentB = new InjectionToken<string>("PARENT_B");
+      const childToken = new InjectionToken<string>("CHILD");
+
+      const parent = new Container();
+      parent.bind({ provide: parentA, useFactory: () => `a(${inject(parentB)})` });
+      parent.bind({ provide: parentB, useFactory: () => `b(${inject(parentA)})` });
+
+      const child = parent.createChild();
+      child.bind({ provide: childToken, useFactory: () => `c(${inject(parentA)})` });
+
+      // The chain must survive the hop into the parent, so that the segment resolved on
+      // the child is part of the reported path.
+      expect(() => child.get(childToken)).toThrowError(
+        'Detected circular dependency: InjectionToken "CHILD" -> InjectionToken "PARENT_A" ' +
+          '-> InjectionToken "PARENT_B" -> InjectionToken "PARENT_A".',
+      );
+    });
+
+    it("should not report a cycle when a token is injected twice on separate branches", () => {
+      const leaf = new InjectionToken<string>("LEAF");
+      const left = new InjectionToken<string>("LEFT");
+      const right = new InjectionToken<string>("RIGHT");
+      const root = new InjectionToken<string>("ROOT");
+
+      const container = new Container();
+      container.bind({ provide: leaf, useFactory: () => "leaf" });
+      container.bind({ provide: left, useFactory: () => `left(${inject(leaf)})` });
+      container.bind({ provide: right, useFactory: () => `right(${inject(leaf)})` });
+      container.bind({ provide: root, useFactory: () => `${inject(left)}+${inject(right)}` });
+
+      expect(container.get(root)).toBe("left(leaf)+right(leaf)");
     });
   });
 

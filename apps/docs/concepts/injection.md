@@ -72,8 +72,7 @@ Note that the `inject()` and `injectAsync()` functions are only available in the
 - During construction of a class being instantiated by the DI container;
 - In the initializer for fields of such classes;
 - In a synchronous factory function specified for `useFactory` of a provider;
-- In the `factory` function specified for an `InjectionToken`;
-- Under `InjectionContext.run()` before any asynchronous execution
+- In the `factory` function specified for an `InjectionToken`.
 
 If you try to use this function outside this context, it will throw
 an error. This is because Needle DI needs a reference to a DI container when
@@ -107,47 +106,27 @@ Please use:
 ```
 :::
 
-## Executing under injection context
+## Manual Injection
 
 Situations where classes aren't used but rather functions can still benefit from
-dependency injection. You can still use `inject()` and `injectAsync()` by obtaining
-the `InjectionContext` of a container and running `.run()`. It also allows you to return
-any value
+dependency injection.
 
-```ts twoslash
-import { InjectionContext, inject, Container } from "@needle-di/core";
+In these cases, manually passing the singleton container instance as an argument
+to the function and using the `.get()` function within provides the same practical
+functionality as using classes with decorators, just with reduced ergonomics.
+
+```ts
+import type { Container } from "@needle-di/core";
 
 import { FooService } from "./foo.service";
+import { BarService } from "./bar.service";
 
-const container = new Container()
+const createMyService = (container: Container) => {
+  fooService = container.get(FooService);
+  barService = container.get(BarService);
 
-const executeServices = () => {
-  const fooService = inject(FooService);
-  
-  return fooService.someMethod()
+  // ...
 }
-
-const injection = container.get(InjectionContext)
-const execution = injection.run(() => executeServices())
-```
-
-In cases where you have to run an async function, `inject()` has to be ran before
-any asynchronous code is executed.
-
-```ts twoslash
-import { InjectionContext, inject, Container } from "@needle-di/core";
-
-import { FooService } from "./foo.service";
-
-const container = new Container()
-
-const promise = new Promise(() => {})
-
-container.get(InjectionContext).run(async () => {
-  const fooService = inject(FooService);
-  await promise;
-  // after this point there is no access to the injection context
-})
 ```
 
 [parameter decorators]: https://github.com/tc39/proposal-class-method-parameter-decorators

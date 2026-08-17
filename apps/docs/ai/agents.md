@@ -46,6 +46,8 @@ generating code based on knowledge of other DI libraries such as Angular, NestJS
 - Use [`InjectionToken<T>`](/concepts/tokens#injectiontoken-t) for values that are not classes,
   and pass a `factory` when the token should be [tree-shakeable](/advanced/tree-shaking).
 - Use [`injectAsync()` and `getAsync()`](/advanced/async-injection) for asynchronous factory providers.
+- Use [`container.runInInjectionContext()`](/concepts/injection#running-in-an-injection-context) to call
+  `inject()` from a plain function that the container did not construct.
 - Use [`{ optional: true }`](/advanced/optional-injection), [`{ multi: true }`](/advanced/multi-injection)
   and [`{ lazy: true }`](/advanced/lazy-injection) instead of hand-rolled alternatives.
 
@@ -55,7 +57,10 @@ generating code based on knowledge of other DI libraries such as Angular, NestJS
 - Don't enable `experimentalDecorators` or `emitDecoratorMetadata`, these are legacy TypeScript decorators.
 - Don't use parameter decorators such as `@Inject()` or `@Injectable()` from other frameworks,
   Needle DI has no parameter decorators.
-- Don't call `inject()` outside an injection context, use `container.get()` there instead.
+- Don't call `inject()` outside an injection context, use `container.get()` or
+  `container.runInInjectionContext()` there instead.
+- Don't call `inject()` after an `await` inside `container.runInInjectionContext()`, the injection
+  context is only active while the given function runs synchronously.
 - Don't create a new `Container` per service, bootstrap a single container (or use
   [child containers](/advanced/child-containers) for scoping).
 

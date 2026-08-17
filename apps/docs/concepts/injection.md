@@ -1,5 +1,5 @@
 ---
-description: "Inject dependencies with the inject() and injectAsync() functions, using constructor injection, initializer injection or manual injection."
+description: "Inject dependencies with the inject() and injectAsync() functions, using constructor injection, initializer injection, manual injection or an injection context you enter yourself."
 ---
 
 # Injection

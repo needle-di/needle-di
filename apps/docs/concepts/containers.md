@@ -1,5 +1,5 @@
 ---
-description: "Create a Container, bind services to it, bootstrap your application with container.get() and create child containers."
+description: "Create a Container, bind services to it, bootstrap your application with container.get(), run functions in an injection context and create child containers."
 ---
 
 # Containers

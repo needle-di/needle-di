@@ -352,6 +352,27 @@ describe("Type-safety", () => {
       container.bindAll(...providerList, [defineProviders(providerList)]);
     });
 
+    it("unbind()", () => {
+      const container = new Container();
+
+      container.unbind(TOKEN1);
+      container.unbind(TOKEN2);
+      container.unbind(FooService);
+      container.unbind(FooChildService);
+      container.unbind("some-string");
+      container.unbind(Symbol("some-symbol"));
+
+      // providers are not accepted, only tokens
+      // @ts-expect-error
+      container.unbind({ provide: FooService, useClass: FooChildService });
+      // @ts-expect-error
+      container.unbind({ provide: TOKEN1, useValue: "Foo" });
+
+      // a token is required
+      // @ts-expect-error
+      container.unbind();
+    });
+
     it("bindAll() with readonly providers", () => {
       const container = new Container();
 

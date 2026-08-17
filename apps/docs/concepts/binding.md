@@ -136,6 +136,25 @@ const container = new Container().bindAll(testProviders);
 To clear a binding, you can use the `.unbind()` or `.unbindAll()` method. This will also remove any instances of the
 service from the container.
 
+The `.unbind()` method takes the token you want to unbind:
+
+```ts twoslash
+import { Container, InjectionToken } from "@needle-di/core";
+import { FooService } from "./foo.service";
+import { MyConfig } from "./my-config";
+
+const MY_CONFIG = new InjectionToken<MyConfig>("MY_CONFIG");
+
+const container = new Container();
+// ---cut---
+container.unbind(FooService);
+container.unbind(MY_CONFIG);
+```
+
+> [!NOTE]
+> Unbinding a token removes *all* providers for that token, including any
+> [multi-providers](../advanced/multi-injection.md).
+
 ---
 
 There are many different ways to bind services,
